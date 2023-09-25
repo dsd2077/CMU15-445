@@ -304,7 +304,7 @@ class Trie {
     }
 
     auto last_char = key[i];
-    auto temp = (*cur)->GetChildNode(last_char);
+    auto temp = (*cur)->GetChildNode(last_char);        // 拿到temp指针
     if (temp == nullptr) {
       // std::unique_ptr<TrieNode> node = std::make_unique<TrieNodeWithValue<T>>(key[i], value);
       std::unique_ptr<TrieNode> node(new TrieNodeWithValue<T>(key[i], value));
@@ -313,10 +313,8 @@ class Trie {
       latch_.WUnlock();
       return false;
     } else {
-      // std::unique_ptr<TrieNode> newNode = std::make_unique<TrieNodeWithValue<T>>((*(*temp)), value);
-      // 先将temp从cur中删掉，然后进行转移，最后进行插入
+      std::unique_ptr<TrieNode> new_node = std::make_unique<TrieNodeWithValue<T>>(std::move(**temp), value);
       (*cur)->RemoveChildNode(last_char);
-      std::unique_ptr<TrieNode> new_node(new TrieNodeWithValue<T>(std::move(*(temp->release())), value));
       (*cur)->InsertChildNode(last_char, std::move(new_node));
     }
 
