@@ -304,7 +304,7 @@ class Trie {
     }
 
     auto last_char = key[i];
-    auto temp = (*cur)->GetChildNode(last_char);        // 拿到temp指针
+    auto temp = (*cur)->GetChildNode(last_char);  // 拿到temp指针
     if (temp == nullptr) {
       // std::unique_ptr<TrieNode> node = std::make_unique<TrieNodeWithValue<T>>(key[i], value);
       std::unique_ptr<TrieNode> node(new TrieNodeWithValue<T>(key[i], value));

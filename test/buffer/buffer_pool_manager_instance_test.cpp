@@ -88,7 +88,7 @@ TEST(BufferPoolManagerInstanceTest, DISABLED_BinaryDataTest) {
   delete disk_manager;
 }
 
-// NOLINTNEXTLINE
+// NOLINTNEXTLINE   no lint next line
 TEST(BufferPoolManagerInstanceTest, DISABLED_SampleTest) {
   const std::string db_name = "test.db";
   const size_t buffer_pool_size = 10;

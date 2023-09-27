@@ -154,11 +154,11 @@ class BufferPoolManagerInstance : public BufferPoolManager {
   /** Pointer to the log manager. Please ignore this for P1. */
   LogManager *log_manager_ __attribute__((__unused__));
   /** Page table for keeping track of buffer pool pages. */
-  ExtendibleHashTable<page_id_t, frame_id_t> *page_table_;
+  ExtendibleHashTable<page_id_t, frame_id_t> *page_table_;  /// page_table_应该是page在pages_数组中的下标
   /** Replacer to find unpinned pages for replacement. */
   LRUKReplacer *replacer_;
   /** List of free frames that don't have any pages on them. */
-  std::list<frame_id_t> free_list_;
+  std::list<frame_id_t> free_list_;  /// 每次从空闲链表中取一个帧，如何空闲链表为空，则尝试进行替换，然后再分配
   /** This latch protects shared data structures. We recommend updating this comment to describe what it protects. */
   std::mutex latch_;
 

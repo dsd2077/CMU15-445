@@ -18,6 +18,7 @@
 #pragma once
 
 #include <list>
+#include <map>
 #include <memory>
 #include <mutex>  // NOLINT
 #include <utility>
@@ -121,7 +122,7 @@ class ExtendibleHashTable : public HashTable<K, V> {
     /** @brief Increment the local depth of a bucket. */
     inline void IncrementDepth() { depth_++; }
 
-    inline auto GetItems() -> std::list<std::pair<K, V>> & { return list_; }
+    inline auto GetItems() -> std::list<std::pair<K, V>> & { return list_; }    // 这里返回的是引用！
 
     /**
      *
@@ -149,9 +150,9 @@ class ExtendibleHashTable : public HashTable<K, V> {
      * TODO(P1): Add implementation
      *
      * @brief Insert the given key-value pair into the bucket.
-     *      1. If a key already exists, the value should be updated.
+     *      1. If a key already exists, the value should be updated.      // 更改返回true还是false?
      *      2. If the bucket is full, do nothing and return false.
-     * @param key The key to be inserted.
+     * @param key The key to be inserted.     
      * @param value The value to be inserted.
      * @return True if the key-value pair is inserted, false otherwise.
      */
@@ -168,11 +169,12 @@ class ExtendibleHashTable : public HashTable<K, V> {
   // TODO(student): You may add additional private members and helper functions and remove the ones
   // you don't need.
 
-  int global_depth_;    // The global depth of the directory
-  size_t bucket_size_;  // The size of a bucket
-  int num_buckets_;     // The number of buckets in the hash table
+  int global_depth_{0};  // The global depth of the directory
+  size_t bucket_size_;   // The size of a bucket
+  int num_buckets_{1};   // The number of buckets in the hash table
   mutable std::mutex latch_;
-  std::vector<std::shared_ptr<Bucket>> dir_;  // The directory of the hash table
+  std::vector<std::shared_ptr<Bucket>> dir_;       // The directory of the hash table
+  std::map<std::shared_ptr<Bucket>, size_t> lsb_;  // 每个bucket的lsb，用于dir_扩张时，将bucket redirect
 
   // The following functions are completely optional, you can delete them if you have your own ideas.
 
