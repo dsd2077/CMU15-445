@@ -14,8 +14,11 @@
 
 #include <limits>
 #include <list>
+#include <map>
 #include <mutex>  // NOLINT
+#include <tuple>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "common/config.h"
@@ -34,6 +37,8 @@ namespace bustub {
  * +inf as its backward k-distance. When multiple frames have +inf backward k-distance,
  * classical LRU algorithm is used to choose victim.
  */
+// 用两个双向链表来实现
+
 class LRUKReplacer {
  public:
   /**
@@ -89,13 +94,14 @@ class LRUKReplacer {
    * TODO(P1): Add implementation
    *
    * @brief Toggle whether a frame is evictable or non-evictable. This function also
-   * controls replacer's size. Note that size is equal to number of evictable entries.
+   * controls replacer's size. Note that size is equal to number of evictable entries.    // 这里明确说了replacer's size
+   * 等于可驱逐的页数
    *
    * If a frame was previously evictable and is to be set to non-evictable, then size should
    * decrement. If a frame was previously non-evictable and is to be set to evictable,
    * then size should increment.
    *
-   * If frame id is invalid, throw an exception or abort the process.
+   * If frame id is invalid, throw an exception or abort the process.     // 怎么定义是否有效呢？
    *
    * For other scenarios, this function should terminate without modifying anything.
    *
@@ -132,13 +138,24 @@ class LRUKReplacer {
    */
   auto Size() -> size_t;
 
+  /**
+   * helper function
+   */
+ private:
+  auto EvictFrameFromList(std::list<std::tuple<frame_id_t, int, bool>> &target_list, frame_id_t *frame_id) -> bool;
+
  private:
   // TODO(student): implement me! You can replace these member variables as you like.
   // Remove maybe_unused if you start using them.
-  [[maybe_unused]] size_t current_timestamp_{0};
-  [[maybe_unused]] size_t curr_size_{0};
-  [[maybe_unused]] size_t replacer_size_;
-  [[maybe_unused]] size_t k_;
+  // [[maybe_unused]] size_t current_timestamp_{0};
+  size_t curr_size_{0};  // 可替换帧数
+  size_t replacer_size_;
+  std::list<std::tuple<frame_id_t, int, bool>>
+      less_than_k_list_;  // 访问频次小于k的列表 tuple<frame_id, 访问次数， 是否可驱逐>
+  std::list<std::tuple<frame_id_t, int, bool>> more_than_k_list_;  // 访问频次大于k的列表
+  std::map<frame_id_t, std::pair<std::list<std::tuple<frame_id_t, int, bool>>::iterator, int>>
+      data_;  // pair<frame_id的迭代器， frame_id在哪一个链表中>  0：less_than_k_list_, 1: more_than_k_list_
+  size_t k_;
   std::mutex latch_;
 };
 

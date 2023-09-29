@@ -177,5 +177,17 @@ class BufferPoolManagerInstance : public BufferPoolManager {
   }
 
   // TODO(student): You may add additional private members and helper functions
+ private:
+  /**
+   * 重置物理块的内存和元数据
+   */
+  void ResetPage(frame_id_t frame_id, page_id_t page_id);
+
+  /**
+   * 驱逐一个物理块
+   */
+  auto EvictFrame(frame_id_t *frame_id) -> bool;
+
+  void SetupNewPage(page_id_t page_id, frame_id_t frame_id);
 };
 }  // namespace bustub

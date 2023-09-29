@@ -122,7 +122,7 @@ class ExtendibleHashTable : public HashTable<K, V> {
     /** @brief Increment the local depth of a bucket. */
     inline void IncrementDepth() { depth_++; }
 
-    inline auto GetItems() -> std::list<std::pair<K, V>> & { return list_; }    // 这里返回的是引用！
+    inline auto GetItems() -> std::list<std::pair<K, V>> & { return list_; }  // 这里返回的是引用！
 
     /**
      *
@@ -152,7 +152,7 @@ class ExtendibleHashTable : public HashTable<K, V> {
      * @brief Insert the given key-value pair into the bucket.
      *      1. If a key already exists, the value should be updated.      // 更改返回true还是false?
      *      2. If the bucket is full, do nothing and return false.
-     * @param key The key to be inserted.     
+     * @param key The key to be inserted.
      * @param value The value to be inserted.
      * @return True if the key-value pair is inserted, false otherwise.
      */
