@@ -5,6 +5,7 @@
 #include "common/rid.h"
 #include "storage/index/b_plus_tree.h"
 #include "storage/page/header_page.h"
+#include "b_plus_tree.h"
 
 namespace bustub {
 INDEX_TEMPLATE_ARGUMENTS
@@ -21,7 +22,7 @@ BPLUSTREE_TYPE::BPlusTree(std::string name, BufferPoolManager *buffer_pool_manag
  * Helper function to decide whether current b+tree is empty
  */
 INDEX_TEMPLATE_ARGUMENTS
-auto BPLUSTREE_TYPE::IsEmpty() const -> bool { return true; }
+auto BPLUSTREE_TYPE::IsEmpty() const -> bool { return root_page_id_ == INVALID_PAGE_ID; }
 /*****************************************************************************
  * SEARCH
  *****************************************************************************/
@@ -30,9 +31,22 @@ auto BPLUSTREE_TYPE::IsEmpty() const -> bool { return true; }
  * This method is used for point query
  * @return : true means key exists
  */
+// TODO(me) : 为什么result用vector来接收？
 INDEX_TEMPLATE_ARGUMENTS
 auto BPLUSTREE_TYPE::GetValue(const KeyType &key, std::vector<ValueType> *result, Transaction *transaction) -> bool {
-  return false;
+  // 从根节点开始搜索，找到可能存在key值的叶子结点
+  if (root_page_id_ == INVALID_PAGE_ID) {
+    return false;
+  }
+  auto leaf_node = FindLeaf(key);
+  leaf_node = reinterpret_cast<B_PLUS_TREE_LEAF_PAGE_TYPE*>(leaf_node);
+  ValueType v;
+  bool is_existed = leaf_node->Lookup(key, v, comparator_);
+  if (!is_existed) {
+    return false;
+  }
+  result->push_back(v);
+  return true;
 }
 
 /*****************************************************************************
@@ -47,6 +61,12 @@ auto BPLUSTREE_TYPE::GetValue(const KeyType &key, std::vector<ValueType> *result
  */
 INDEX_TEMPLATE_ARGUMENTS
 auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transaction *transaction) -> bool {
+  // 创建一个新的节点？——创建一个叶结点,通过bpm创建一个新的page，然后调用leaf node的init函数来进行初始化
+  // bpm->NewPage(&page_id)创建一个page，
+  // auto bpt_page = reinterpret_cast<BPlusTreePage *>(bpm->FetchPage(page_id)->GetData());   // 强制类型转换
+  // bpt_page->init();    // 初始化
+  
+  // 分裂一定发生在叶结点
   return false;
 }
 
@@ -95,6 +115,24 @@ auto BPLUSTREE_TYPE::End() -> INDEXITERATOR_TYPE { return INDEXITERATOR_TYPE(); 
  */
 INDEX_TEMPLATE_ARGUMENTS
 auto BPLUSTREE_TYPE::GetRootPageId() -> page_id_t { return 0; }
+
+INDEX_TEMPLATE_ARGUMENTS
+auto BPLUSTREE_TYPE::FindLeaf(const KeyType &key) -> BPlusTreePage * {
+  auto cur_page_id = root_page_id_;
+  BPlusTreePage *cur_page;
+  while (cur_page_id != INVALID_PAGE_ID) {
+    cur_page = reinterpret_cast<BPlusTreePage *>(buffer_pool_manager_->FetchPage(root_page_id_)->GetData());
+    if (cur_page->IsLeafPage()) {
+      auto cur_leaf = reinterpret_cast<BPlusTreeLeafPage<KeyType, RID, GenericComparator<8>> *>(cur_page);
+      
+    } else {
+
+    }
+
+  }
+  return nullptr; 
+}
+
 
 /*****************************************************************************
  * UTILITIES AND DEBUG
@@ -307,6 +345,7 @@ void BPLUSTREE_TYPE::ToString(BPlusTreePage *page, BufferPoolManager *bpm) const
   }
   bpm->UnpinPage(page->GetPageId(), false);
 }
+
 
 template class BPlusTree<GenericKey<4>, RID, GenericComparator<4>>;
 template class BPlusTree<GenericKey<8>, RID, GenericComparator<8>>;

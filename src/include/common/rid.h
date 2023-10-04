@@ -32,8 +32,10 @@ class RID {
    */
   RID(page_id_t page_id, uint32_t slot_num) : page_id_(page_id), slot_num_(slot_num) {}
 
+  // TODO(dsd):没看懂
   explicit RID(int64_t rid) : page_id_(static_cast<page_id_t>(rid >> 32)), slot_num_(static_cast<uint32_t>(rid)) {}
 
+  // TODO(dsd):没看懂
   inline auto Get() const -> int64_t { return (static_cast<int64_t>(page_id_)) << 32 | slot_num_; }
 
   inline auto GetPageId() const -> page_id_t { return page_id_; }
@@ -53,6 +55,7 @@ class RID {
     return os.str();
   }
 
+  // TODO(dsd)：为什么要设置为友元函数？
   friend auto operator<<(std::ostream &os, const RID &rid) -> std::ostream & {
     os << rid.ToString();
     return os;

@@ -82,6 +82,9 @@ class BPlusTree {
 
   void ToString(BPlusTreePage *page, BufferPoolManager *bpm) const;
 
+  // find the leaf node
+  auto FindLeaf(const KeyType &key) -> BPlusTreePage *;
+
   // member variable
   std::string index_name_;
   page_id_t root_page_id_;

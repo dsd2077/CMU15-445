@@ -46,7 +46,7 @@ TEST(BPlusTreeTests, DISABLED_InsertTest1) {
   index_key.SetFromInteger(key);
   tree.Insert(index_key, rid, transaction);
 
-  auto root_page_id = tree.GetRootPageId();
+  auto root_page_id = tree.GetRootPageId();   // root_page_id和page_id相等吗？
   auto root_page = reinterpret_cast<BPlusTreePage *>(bpm->FetchPage(root_page_id)->GetData());
   ASSERT_NE(root_page, nullptr);
   ASSERT_TRUE(root_page->IsLeafPage());
@@ -129,7 +129,7 @@ TEST(BPlusTreeTests, DISABLED_InsertTest2) {
 
 TEST(BPlusTreeTests, DISABLED_InsertTest3) {
   // create KeyComparator and index schema
-  auto key_schema = ParseCreateStatement("a bigint");
+  auto key_schema = ParseCreateStatement("a bigint");   
   GenericComparator<8> comparator(key_schema.get());
 
   auto *disk_manager = new DiskManager("test.db");

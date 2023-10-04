@@ -39,6 +39,7 @@ namespace bustub {
  * | ParentPageId (4) | PageId (4) | NextPageId (4)
  *  -----------------------------------------------
  */
+// 没有构造函数？
 INDEX_TEMPLATE_ARGUMENTS
 class BPlusTreeLeafPage : public BPlusTreePage {
  public:
@@ -50,9 +51,12 @@ class BPlusTreeLeafPage : public BPlusTreePage {
   void SetNextPageId(page_id_t next_page_id);
   auto KeyAt(int index) const -> KeyType;
 
+
+  // 查找某个key值的元素是否在叶子结点中
+  auto Lookup(const KeyType& key, ValueType &value, const KeyComparator &comparator) -> bool;
  private:
   page_id_t next_page_id_;
   // Flexible array member for page data.
-  MappingType array_[1];
+  MappingType array_[1];    // TODO(me) : 这里的大小固定为1，怎么做到可变大小？
 };
 }  // namespace bustub
