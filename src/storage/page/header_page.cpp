@@ -20,7 +20,7 @@ namespace bustub {
  * Record related
  */
 auto HeaderPage::InsertRecord(const std::string &name, const page_id_t root_id) -> bool {
-  assert(name.length() < 32);
+  assert(name.length() < 32);  // 最后一个字节用于存放\0，所以字符最长为31个字节
   assert(root_id > INVALID_PAGE_ID);
 
   int record_num = GetRecordCount();

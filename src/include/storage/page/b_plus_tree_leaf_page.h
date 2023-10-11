@@ -13,6 +13,8 @@
 #include <utility>
 #include <vector>
 
+#include "common/config.h"
+#include "storage/page/b_plus_tree_internal_page.h"
 #include "storage/page/b_plus_tree_page.h"
 
 namespace bustub {
@@ -39,10 +41,18 @@ namespace bustub {
  * | ParentPageId (4) | PageId (4) | NextPageId (4)
  *  -----------------------------------------------
  */
-// 没有构造函数？
+
+// 前向申明BPlusTree类, 这样才能在Insert函数中使用BPT指针
+INDEX_TEMPLATE_ARGUMENTS
+class BPlusTree;
+
 INDEX_TEMPLATE_ARGUMENTS
 class BPlusTreeLeafPage : public BPlusTreePage {
  public:
+  using InternalPage = BPlusTreeInternalPage<KeyType, page_id_t, KeyComparator>;
+  using LeafPage = BPlusTreeLeafPage<KeyType, ValueType, KeyComparator>;
+  using BPT = BPlusTree<KeyType, ValueType, KeyComparator>;
+
   // After creating a new leaf page from buffer pool, must call initialize
   // method to set default values
   void Init(page_id_t page_id, page_id_t parent_id = INVALID_PAGE_ID, int max_size = LEAF_PAGE_SIZE);
@@ -51,12 +61,49 @@ class BPlusTreeLeafPage : public BPlusTreePage {
   void SetNextPageId(page_id_t next_page_id);
   auto KeyAt(int index) const -> KeyType;
 
+  // 获取元素的引用，提供给迭代器使用
+  auto GetItemRef(int index) const -> const MappingType &;
+  auto GetItem(int index) -> MappingType;
 
   // 查找某个key值的元素是否在叶子结点中
-  auto Lookup(const KeyType& key, ValueType &value, const KeyComparator &comparator) -> bool;
+  auto Lookup(const KeyType &key, ValueType &value, BPT *bpt) -> bool;
+
+  // 寻找大于等于key值的最小元素的位置
+  auto LowerBound(const KeyType &key, BPT *bpt) -> int;
+
+  // 插入叶结点
+  // 插入成功返回true, 否则返回false
+  auto Insert(const KeyType &key, const ValueType &value, BPT *bpt) -> bool;
+
+  // 叶结点发生分裂
+  auto BreakDown(BPT *bpt) -> LeafPage *;
+
+  // 获取“稳定的”父节点（插入后不会导致分裂）
+  // 如果没有父节点，创建一个新的父节点
+  // 否则尝试对父节点进行分裂，返回一个稳定的父节点
+  auto GetStableParentPage(const KeyType &key, BPT *bpt) -> InternalPage *;
+  // 父节点存在——获取当前节点的父节点
+  auto GetParentPage(BPT *bpt) -> InternalPage *;
+  // 父节点不存在——创建一个新的父节点
+  auto CreateANewParentPage(BPT *bpt) -> InternalPage *;
+
+  void Remove(const KeyType &key, BPT *bpt);
+
+  auto GetSablingPage(page_id_t page_id, BPT *bpt) -> LeafPage *;
+  void BorrowData(int index, MappingType &data);
+  // void SwapVriables(LeafPage *sabling_page);
+  // 将当前节点中的所有KV pair全部插入到sabling节点中
+  void MergeSablingIsPrev(LeafPage *sabling_page, BPT *bpt);
+  void MergeSablingIsPost(LeafPage *sabling_page, BPT *bpt);
+
+  // helper function
+ private:
+  // InsertOne与Insert相比：1、总是插入(不考虑重复插入)  2、不考虑分裂
+  void InsertOne(const KeyType &key, const ValueType &value, BPT *bpt);
+
  private:
   page_id_t next_page_id_;
   // Flexible array member for page data.
-  MappingType array_[1];    // TODO(me) : 这里的大小固定为1，怎么做到可变大小？
+  MappingType array_[1];  // TODO(me) : 这里的大小固定为1，怎么做到可变大小？为什么要做成这样的可变数组？
 };
 }  // namespace bustub

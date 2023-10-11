@@ -87,7 +87,7 @@ auto BufferPoolManagerInstance::NewPgImp(page_id_t *page_id) -> Page * {
     // 取出一个物理块号
     frame_id_t frame_id = free_list_.back();
     free_list_.pop_back();
-    *page_id = AllocatePage();  
+    *page_id = AllocatePage();
     SetupNewPage(*page_id, frame_id);
     return &pages_[frame_id];
   }

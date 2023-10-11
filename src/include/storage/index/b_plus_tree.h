@@ -33,6 +33,7 @@ namespace bustub {
  * (3) The structure should shrink and grow dynamically
  * (4) Implement index iterator for range scan
  */
+
 INDEX_TEMPLATE_ARGUMENTS
 class BPlusTree {
   using InternalPage = BPlusTreeInternalPage<KeyType, page_id_t, KeyComparator>;
@@ -43,7 +44,7 @@ class BPlusTree {
                      int leaf_max_size = LEAF_PAGE_SIZE, int internal_max_size = INTERNAL_PAGE_SIZE);
 
   // Returns true if this B+ tree has no keys and values.
-  auto IsEmpty() const -> bool;
+  auto IsEmpty() -> bool;
 
   // Insert a key-value pair into this B+ tree.
   auto Insert(const KeyType &key, const ValueType &value, Transaction *transaction = nullptr) -> bool;
@@ -56,8 +57,11 @@ class BPlusTree {
 
   // return the page id of the root node
   auto GetRootPageId() -> page_id_t;
+  auto GetLeafMaxSize() -> int { return leaf_max_size_; }
+  auto GetInternalMaxSize() -> int { return internal_max_size_; }
 
   // index iterator
+  // 如果B+树为空树，返回什么？
   auto Begin() -> INDEXITERATOR_TYPE;
   auto Begin(const KeyType &key) -> INDEXITERATOR_TYPE;
   auto End() -> INDEXITERATOR_TYPE;
@@ -74,16 +78,31 @@ class BPlusTree {
   // read data from file and remove one by one
   void RemoveFromFile(const std::string &file_name, Transaction *transaction = nullptr);
 
- private:
-  void UpdateRootPageId(int insert_record = 0);
+  // helper function
+  void SetRootPageId(page_id_t new_root_page_id);
+  auto CompareKey(const KeyType &lkey, const KeyType &rkey) -> int;
+  auto NewPage(page_id_t *page_id) -> Page *;
+  auto FetchPage(page_id_t page_id) -> Page *;
+  void UnpinPage(page_id_t page_id, bool is_dirty);
+  auto DeletePage(page_id_t page_id) -> bool;
 
+ private:
+  void UpdateRootPageId(
+      int insert_record = 0);  // 为什么这个函数是一个私有函数呢？——在SetRootPageId中调用该函数就可以了
   /* Debug Routines for FREE!! */
   void ToGraph(BPlusTreePage *page, BufferPoolManager *bpm, std::ofstream &out) const;
 
   void ToString(BPlusTreePage *page, BufferPoolManager *bpm) const;
 
   // find the leaf node
-  auto FindLeaf(const KeyType &key) -> BPlusTreePage *;
+  auto FindLeaf(const KeyType &key) -> LeafPage *;
+  auto FindLeafForSearch(const KeyType &key) -> Page *;
+  auto FindLeafForInsert(const KeyType &key) -> LeafPage *;
+  auto FindLeafForDelete(const KeyType &key) -> LeafPage *;
+
+  // find leaftmost leaf page
+  auto FindLeftMostLeafPage() -> LeafPage *;
+  auto FindRightMostLeafPage() -> LeafPage *;
 
   // member variable
   std::string index_name_;
@@ -92,6 +111,7 @@ class BPlusTree {
   KeyComparator comparator_;
   int leaf_max_size_;
   int internal_max_size_;
+  ReaderWriterLatch root_page_id_latch_;
 };
 
 }  // namespace bustub
