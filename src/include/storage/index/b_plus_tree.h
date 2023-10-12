@@ -18,6 +18,7 @@
 #include "storage/index/index_iterator.h"
 #include "storage/page/b_plus_tree_internal_page.h"
 #include "storage/page/b_plus_tree_leaf_page.h"
+#include "storage/page/b_plus_tree_page.h"
 
 namespace bustub {
 
@@ -97,12 +98,13 @@ class BPlusTree {
   // find the leaf node
   auto FindLeaf(const KeyType &key) -> LeafPage *;
   auto FindLeafForSearch(const KeyType &key) -> Page *;
-  auto FindLeafForInsert(const KeyType &key) -> LeafPage *;
-  auto FindLeafForDelete(const KeyType &key) -> LeafPage *;
+  auto FindLeafForInsertAndRemove(const KeyType &key, Page *root_page, std::vector<Page *> &ancestors, OpType op_type)
+      -> LeafPage *;
+  void ReleaseAllAncestorsLocks(std::vector<Page *> &ancestors, Page *root_page, bool is_dirty);
 
   // find leaftmost leaf page
-  auto FindLeftMostLeafPage() -> LeafPage *;
-  auto FindRightMostLeafPage() -> LeafPage *;
+  auto FindLeftMostLeafPage() -> Page *;
+  auto FindRightMostLeafPage() -> Page *;
 
   // member variable
   std::string index_name_;

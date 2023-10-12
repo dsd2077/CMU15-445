@@ -17,6 +17,7 @@ namespace bustub {
 INDEX_TEMPLATE_ARGUMENTS
 INDEXITERATOR_TYPE::~IndexIterator() {
   if (leaf_page_ != nullptr) {
+    page_->RUnlatch();
     bpt_->UnpinPage(leaf_page_->GetPageId(), false);
   }
 }
@@ -25,8 +26,10 @@ INDEXITERATOR_TYPE::~IndexIterator() {
 // INDEXITERATOR_TYPE::IndexIterator(const IndexIterator &other) = default;
 
 INDEX_TEMPLATE_ARGUMENTS
-INDEXITERATOR_TYPE::IndexIterator(BPT *bpt, LeafPage *leaf_page, int pos)
-    : bpt_(bpt), leaf_page_(leaf_page), current_(pos) {}
+INDEXITERATOR_TYPE::IndexIterator(BPT *bpt, Page *page, int pos)
+    : bpt_(bpt), page_(page), current_(pos) {
+      leaf_page_ = reinterpret_cast<LeafPage *>(page_);
+    }
 
 INDEX_TEMPLATE_ARGUMENTS
 auto INDEXITERATOR_TYPE::IsEnd() -> bool {
@@ -55,8 +58,12 @@ auto INDEXITERATOR_TYPE::operator++() -> INDEXITERATOR_TYPE & {
   // 当前节点遍历完，跳至下一个节点
   if (current_ == leaf_page_->GetSize() - 1 && leaf_page_->GetNextPageId() != INVALID_PAGE_ID) {
     Page *page = bpt_->FetchPage(leaf_page_->GetNextPageId());
+
+    page->RLatch();
+    page->RUnlatch();
     bpt_->UnpinPage(leaf_page_->GetPageId(), false);
 
+    page_ = page;
     leaf_page_ = reinterpret_cast<LeafPage *>(page);
     current_ = 0;
   } else {

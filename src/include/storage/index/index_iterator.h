@@ -27,7 +27,7 @@ class IndexIterator {
 
   // you may define your own constructor based on your member variables
   IndexIterator() = default;
-  IndexIterator(BPT *bpt, LeafPage *leaf_page, int pos);
+  IndexIterator(BPT *bpt, Page *page, int pos);
   // 复制构造函数
   IndexIterator(const IndexIterator &other) = default;
   ~IndexIterator();  // NOLINT
@@ -50,6 +50,7 @@ class IndexIterator {
  private:
   // add your own private member variables here
   BPT *bpt_;
+  Page *page_;
   LeafPage *leaf_page_;
   int current_;
 };
