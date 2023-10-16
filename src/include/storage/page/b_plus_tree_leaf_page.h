@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "common/config.h"
+#include "concurrency/transaction.h"
 #include "storage/page/b_plus_tree_internal_page.h"
 #include "storage/page/b_plus_tree_page.h"
 
@@ -73,7 +74,7 @@ class BPlusTreeLeafPage : public BPlusTreePage {
 
   // 插入叶结点
   // 插入成功返回true, 否则返回false
-  auto Insert(const KeyType &key, const ValueType &value, BPT *bpt) -> bool;
+  auto Insert(const KeyType &key, const ValueType &value, BPT *bpt, Transaction *transaction) -> bool;
 
   // 叶结点发生分裂
   auto BreakDown(BPT *bpt) -> LeafPage *;
@@ -84,6 +85,7 @@ class BPlusTreeLeafPage : public BPlusTreePage {
   auto GetStableParentPage(const KeyType &key, BPT *bpt) -> InternalPage *;
   // 父节点存在——获取当前节点的父节点
   auto GetParentPage(BPT *bpt) -> InternalPage *;
+  auto GetParentPage(page_id_t parent_page_id, Transaction *transaction) -> InternalPage *;
   // 父节点不存在——创建一个新的父节点
   auto CreateANewParentPage(BPT *bpt) -> InternalPage *;
 

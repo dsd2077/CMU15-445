@@ -101,11 +101,13 @@ void LRUKReplacer::SetEvictable(frame_id_t frame_id, bool set_evictable) {
   std::scoped_lock<std::mutex> guard(latch_);
   auto it = data_.find(frame_id);
   if (it == data_.end()) {
+    throw "can't find the frame_id";
     return;
   }
-  if (std::get<2>(*(it->second.first)) && !set_evictable) {
+
+  if (std::get<2>(*(it->second.first)) && !set_evictable) {  // 之前可驱逐，现在不可驱逐
     curr_size_--;
-  } else if (!std::get<2>(*(it->second.first)) && set_evictable) {
+  } else if (!std::get<2>(*(it->second.first)) && set_evictable) {  // 之前不可驱逐，现在可驱逐
     curr_size_++;
   }
   std::get<2>(*(it->second.first)) = set_evictable;

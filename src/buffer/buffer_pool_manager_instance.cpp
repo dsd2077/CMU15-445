@@ -48,8 +48,7 @@ void BufferPoolManagerInstance::ResetPage(frame_id_t frame_id, page_id_t page_id
   pages_[frame_id].page_id_ = page_id;
   pages_[frame_id].pin_count_ = 0;
   pages_[frame_id].is_dirty_ = false;
-
-  replacer_->SetEvictable(frame_id, false);  // 这里有一个逻辑bug，pin_count设置为零了，但是又不可驱逐
+  replacer_->SetEvictable(frame_id, true);
 }
 
 auto BufferPoolManagerInstance::EvictFrame(frame_id_t *frame_id) -> bool {
@@ -74,6 +73,7 @@ void BufferPoolManagerInstance::SetupNewPage(page_id_t page_id, frame_id_t frame
   // 重置物理块
   ResetPage(frame_id, page_id);
   pages_[frame_id].pin_count_++;
+  replacer_->SetEvictable(frame_id, false);
 }
 
 auto BufferPoolManagerInstance::NewPgImp(page_id_t *page_id) -> Page * {

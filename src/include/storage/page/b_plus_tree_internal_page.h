@@ -15,6 +15,7 @@
 #include "buffer/buffer_pool_manager.h"
 #include "common/config.h"
 #include "common/rid.h"
+#include "concurrency/transaction.h"
 #include "storage/page/b_plus_tree_page.h"
 
 namespace bustub {
@@ -56,10 +57,13 @@ class BPlusTreeInternalPage : public BPlusTreePage {
 
   // 理论上来说这个函数只能成功不能失败
   // 因为Insert只会向稳定（插入后不会导致分裂）的节点中进行插入
-  void Insert(page_id_t prev, const KeyType &key, page_id_t next, BPT *bpt);
+  // 返回父节点的ID,用于孩子节点修改parent_page_id
+  auto Insert(page_id_t prev, const KeyType &key, page_id_t next, Transaction *transaction, BPT *bpt) -> page_id_t;
+  void InsertOne(page_id_t prev, const KeyType &key, page_id_t next, BPT *bpt);
 
   // 试图对中间节点进行分裂，如果不需要分裂直接返回this，否则返回分裂之后的节点用于插入
   auto TryBreak(const KeyType &key, BPT *bpt) -> InternalPage *;
+  auto BreakDown(KeyType &split_key, BPT *bpt) -> InternalPage *;
 
   // 获取“稳定的”父节点（插入后不会导致分裂）
   // 如果没有父节点，创建一个新的父节点
@@ -67,6 +71,7 @@ class BPlusTreeInternalPage : public BPlusTreePage {
   auto GetStableParentPage(const KeyType &key, BPT *bpt) -> InternalPage *;
   // 父节点存在——获取当前节点的父节点
   auto GetParentPage(BPT *bpt) -> InternalPage *;
+  auto GetParentPage(page_id_t parent_page_id, Transaction *transaction) -> InternalPage *;
   // 父节点不存在——创建一个新的父节点
   auto CreateANewParentPage(BPT *bpt) -> InternalPage *;
 

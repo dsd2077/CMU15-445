@@ -13,7 +13,6 @@
 #include <queue>
 #include <string>
 #include <vector>
-
 #include "concurrency/transaction.h"
 #include "storage/index/index_iterator.h"
 #include "storage/page/b_plus_tree_internal_page.h"
@@ -88,6 +87,7 @@ class BPlusTree {
   auto DeletePage(page_id_t page_id) -> bool;
 
  private:
+  void CreateANewRootPage();
   void UpdateRootPageId(
       int insert_record = 0);  // 为什么这个函数是一个私有函数呢？——在SetRootPageId中调用该函数就可以了
   /* Debug Routines for FREE!! */
@@ -97,10 +97,10 @@ class BPlusTree {
 
   // find the leaf node
   auto FindLeaf(const KeyType &key) -> LeafPage *;
-  auto FindLeafForSearch(const KeyType &key) -> Page *;
-  auto FindLeafForInsertAndRemove(const KeyType &key, Page *root_page, std::vector<Page *> &ancestors, OpType op_type)
-      -> LeafPage *;
-  void ReleaseAllAncestorsLocks(std::vector<Page *> &ancestors, Page *root_page, bool is_dirty);
+  auto FindLeafForSearch(const KeyType &key, bool &root_latch) -> Page *;
+  auto FindLeafForInsertAndRemove(const KeyType &key, Transaction *transaction, OpType op_type) -> LeafPage *;
+  void ReleaseAllAncestorsLocks(Transaction *transaction, bool is_dirty);
+  auto IsPageSafe(BPlusTreePage *bpt_page, OpType op) -> bool;
 
   // find leaftmost leaf page
   auto FindLeftMostLeafPage() -> Page *;
@@ -114,6 +114,7 @@ class BPlusTree {
   int leaf_max_size_;
   int internal_max_size_;
   ReaderWriterLatch root_page_id_latch_;
+  std::mutex log_mutex_;
 };
 
 }  // namespace bustub
