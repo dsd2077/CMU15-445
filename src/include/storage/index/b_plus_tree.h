@@ -86,6 +86,8 @@ class BPlusTree {
   void UnpinPage(page_id_t page_id, bool is_dirty);
   auto DeletePage(page_id_t page_id) -> bool;
 
+  auto FindLeaf(const KeyType &key) -> LeafPage *;
+
  private:
   void CreateANewRootPage();
   void UpdateRootPageId(
@@ -96,7 +98,6 @@ class BPlusTree {
   void ToString(BPlusTreePage *page, BufferPoolManager *bpm) const;
 
   // find the leaf node
-  auto FindLeaf(const KeyType &key) -> LeafPage *;
   auto FindLeafForSearch(const KeyType &key, bool &root_latch) -> Page *;
   auto FindLeafForInsertAndRemove(const KeyType &key, Transaction *transaction, OpType op_type) -> LeafPage *;
   void ReleaseAllAncestorsLocks(Transaction *transaction, bool is_dirty);

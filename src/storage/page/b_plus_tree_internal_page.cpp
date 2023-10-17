@@ -96,11 +96,25 @@ auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::Insert(page_id_t prev, const KeyType &key, 
     InsertOne(prev, key, next, bpt);  //
     return GetPageId();
   }
-  // 是否存在可能：当前节点中存在和key一样的值？——有可能，但现在不涉及删除
 
   // 发生分裂
   KeyType split_key;
+  // 假如max_size为3就会存在一边是两个孩子，一边为一个孩子，如果此时新插入的节点插入到2个孩子的节点中，那另外一边就只有一个孩子
   InternalPage *new_internal_page = BreakDown(split_key, bpt);
+  // 插入key
+  if (bpt->CompareKey(split_key, key) <= 0) {  // 坑：必须有等号
+    new_internal_page->InsertOne(prev, key, next, bpt);
+  } else {
+    InsertOne(prev, key, next, bpt);
+  }
+  // 插完之后还需要rebalance，否有有可能出现size<minsize的情况
+  if (new_internal_page->GetSize() < new_internal_page->GetMinSize()) {
+    new_internal_page->InsertOne(array_[GetSize() - 1].second, split_key, new_internal_page->ValueAt(0), bpt);
+    split_key = array_[GetSize() - 1].first;
+    SetSize(GetSize() - 1);
+  }
+  new_internal_page->ModifyChildParentPageID(bpt);
+
   if (IsRootPage()) {
     InternalPage *new_parent_page = CreateANewParentPage(bpt);
     new_parent_page->InsertOne(GetPageId(), split_key, new_internal_page->GetPageId(), bpt);
@@ -109,9 +123,6 @@ auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::Insert(page_id_t prev, const KeyType &key, 
   } else {
     auto *bpt_internal_page = GetParentPage(GetParentPageId(), transaction);
     // auto *bpt_internal_page = GetParentPage(bpt);
-    if (bpt_internal_page == nullptr) {
-      throw "bad case";
-    }
     assert(bpt_internal_page != nullptr);
     page_id_t parent_page_id =
         bpt_internal_page->Insert(GetPageId(), split_key, new_internal_page->GetPageId(), transaction, bpt);
@@ -119,14 +130,7 @@ auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::Insert(page_id_t prev, const KeyType &key, 
     // bpt->UnpinPage(bpt_internal_page->GetPageId(), true);
   }
 
-  // 插入key
-  if (bpt->CompareKey(split_key, key) <= 0) {  // 坑：必须有等号
-    new_internal_page->InsertOne(prev, key, next, bpt);
-  } else {
-    InsertOne(prev, key, next, bpt);
-  }
   bpt->UnpinPage(new_internal_page->GetPageId(), true);  // 大坑：新创建的节点必须要unpin
-
   return bpt->CompareKey(split_key, key) <= 0 ? new_internal_page->GetPageId() : GetPageId();
 }
 
@@ -166,7 +170,6 @@ auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::BreakDown(KeyType &split_key, BPT *bpt) -> 
   for (int i = split_point + 1; i < GetSize(); i++) {
     new_internal_page->InsertOne(array_[i - 1].second, array_[i].first, array_[i].second, bpt);  // 从小到大插入
   }
-  new_internal_page->ModifyChildParentPageID(bpt);
   SetSize(GetMinSize());
   return new_internal_page;
 }
@@ -422,7 +425,7 @@ auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::GetSablingPageId(page_id_t page_id, page_id
     return array_[index + 1].first;
   }
 
-  // 尾部
+  // 尾部:
   if (index == GetSize() - 1) {
     sabling = array_[index - 1].second;
     is_prev = true;

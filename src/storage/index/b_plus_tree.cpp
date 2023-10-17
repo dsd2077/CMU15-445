@@ -128,6 +128,7 @@ void BPLUSTREE_TYPE::CreateANewRootPage() {
 
   auto *bpt_leaf_page = reinterpret_cast<LeafPage *>(new_page->GetData());
   bpt_leaf_page->Init(root_page_id_, INVALID_PAGE_ID, leaf_max_size_);
+
   UpdateRootPageId(1);
   UnpinPage(root_page_id_, true);
 }
@@ -144,26 +145,27 @@ void BPLUSTREE_TYPE::CreateANewRootPage() {
  */
 INDEX_TEMPLATE_ARGUMENTS
 void BPLUSTREE_TYPE::Remove(const KeyType &key, Transaction *transaction) {
-  // if (IsEmpty()) {
-  //   return;
-  // }
-  // root_page_id_latch_.WLock();
-  // transaction->AddIntoPageSet(nullptr);
-
-  // LeafPage *bpt_leaf_page = FindLeafForInsertAndRemove(key, transaction, OpType::DELETE);
-  // bpt_leaf_page->Remove(key, this);
-
-  // ReleaseAllAncestorsLocks(transaction, true);
-
-  // 一把大锁
   if (IsEmpty()) {
     return;
   }
   root_page_id_latch_.WLock();
-  LeafPage *bpt_leaf_page = FindLeaf(key);
-  bpt_leaf_page->Remove(key, this);
-  UnpinPage(bpt_leaf_page->GetPageId(), true);
-  root_page_id_latch_.WUnlock();
+  // std::cout << "Thread " << std::this_thread::get_id() << " remove " << key <<  std::endl;
+  transaction->AddIntoPageSet(nullptr);
+
+  LeafPage *bpt_leaf_page = FindLeafForInsertAndRemove(key, transaction, OpType::DELETE);
+  bpt_leaf_page->Remove(key, this, transaction);
+
+  ReleaseAllAncestorsLocks(transaction, true);
+
+  // 一把大锁
+  // if (IsEmpty()) {
+  //   return;
+  // }
+  // root_page_id_latch_.WLock();
+  // LeafPage *bpt_leaf_page = FindLeaf(key);
+  // bpt_leaf_page->Remove(key, this);
+  // UnpinPage(bpt_leaf_page->GetPageId(), true);
+  // root_page_id_latch_.WUnlock();
 }
 
 /*****************************************************************************
@@ -330,6 +332,20 @@ auto BPLUSTREE_TYPE::FindLeafForInsertAndRemove(const KeyType &key, Transaction 
   Page *buffer_page_parent = root_page;  // 缓存池中的page
   auto *bpt_page_cur = reinterpret_cast<BPlusTreePage *>(buffer_page_parent->GetData());
 
+  // 循环检测是否为根节点
+  // Page *root_page = buffer_pool_manager_->FetchPage(root_page_id_);
+  // root_page->WLatch();  // 先锁根节点
+  // assert(root_page != nullptr);
+  // auto *bpt_page_cur = reinterpret_cast<BPlusTreePage *>(root_page->GetData());
+  // while (!bpt_page_cur->IsRootPage()) {
+  //   root_page->WUnlatch();
+  //   root_page = buffer_pool_manager_->FetchPage(root_page_id_);
+  //   root_page->WLatch();
+  //   bpt_page_cur = reinterpret_cast<BPlusTreePage *>(root_page->GetData());
+  // }
+  // transaction->AddIntoPageSet(root_page);
+  // Page *buffer_page_parent = root_page;  // 缓存池中的page
+
   while (!bpt_page_cur->IsLeafPage()) {
     auto *internal_page = reinterpret_cast<InternalPage *>(bpt_page_cur);
     auto next_page_id = internal_page->Lookup(key, this);
@@ -358,7 +374,7 @@ void BPLUSTREE_TYPE::ReleaseAllAncestorsLocks(Transaction *transaction, bool is_
   if (transaction == nullptr) {
     return;
   }
-  std::shared_ptr<std::deque<Page *>> ancestors = transaction->GetPageSet();
+  // std::shared_ptr<std::deque<Page *>> ancestors = transaction->GetPageSet();
   // std::cout << "thread :" << std::this_thread::get_id() << " release ancestors : " ;
 
   while (!transaction->GetPageSet()->empty()) {
@@ -390,8 +406,11 @@ auto BPLUSTREE_TYPE::IsPageSafe(BPlusTreePage *bpt_page, OpType op) -> bool {
   if (op == OpType::DELETE) {
     // 非叶子根节点，当删除最后一个key时将第一个孩子当做新的根结点,
     // 如果一个节点既是根节点也是叶结点，此时树中只有一个节点，无论如何都不会进行分裂
-    if (bpt_page->IsRootPage() && !bpt_page->IsLeafPage()) {
-      return bpt_page->GetSize() > 1;
+    if (bpt_page->IsRootPage()) {
+      if (bpt_page->IsLeafPage()) {
+        return bpt_page->GetSize() > 1;
+      }
+      return bpt_page->GetSize() > 2;
     }
     return bpt_page->GetSize() > bpt_page->GetMinSize();
   }
@@ -413,7 +432,7 @@ auto BPLUSTREE_TYPE::IsPageSafe(BPlusTreePage *bpt_page, OpType op) -> bool {
 INDEX_TEMPLATE_ARGUMENTS
 void BPLUSTREE_TYPE::UpdateRootPageId(int insert_record) {
   auto *header_page = static_cast<HeaderPage *>(buffer_pool_manager_->FetchPage(HEADER_PAGE_ID));
-  // header_page->WLatch();
+  header_page->WLatch();
   if (insert_record != 0) {
     // create a new record<index_name + root_page_id> in header_page
     header_page->InsertRecord(index_name_, root_page_id_);
@@ -421,7 +440,7 @@ void BPLUSTREE_TYPE::UpdateRootPageId(int insert_record) {
     // update root_page_id in header_page
     header_page->UpdateRecord(index_name_, root_page_id_);
   }
-  // header_page->WUnlatch();
+  header_page->WUnlatch();
   buffer_pool_manager_->UnpinPage(HEADER_PAGE_ID, true);
 }
 

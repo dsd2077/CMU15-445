@@ -89,7 +89,7 @@ class BPlusTreeLeafPage : public BPlusTreePage {
   // 父节点不存在——创建一个新的父节点
   auto CreateANewParentPage(BPT *bpt) -> InternalPage *;
 
-  void Remove(const KeyType &key, BPT *bpt);
+  void Remove(const KeyType &key, BPT *bpt, Transaction *transaction);
 
   auto GetSablingPage(page_id_t page_id, BPT *bpt) -> LeafPage *;
   void BorrowData(int index, MappingType &data);

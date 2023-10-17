@@ -136,18 +136,14 @@ auto B_PLUS_TREE_LEAF_PAGE_TYPE::Insert(const KeyType &key, const ValueType &val
   // 没有父节点，需要新建一个
   if (IsRootPage()) {
     InternalPage *new_parent_page = CreateANewParentPage(bpt);
-    page_id_t parent_page_id =
-        new_parent_page->Insert(GetPageId(), new_leaf_page->KeyAt(0), new_leaf_page->GetPageId(), transaction, bpt);
-    new_leaf_page->SetParentPageId(parent_page_id);
+    new_parent_page->Insert(GetPageId(), new_leaf_page->KeyAt(0), new_leaf_page->GetPageId(), transaction, bpt);
+    new_leaf_page->SetParentPageId(new_parent_page->GetPageId());
     bpt->UnpinPage(new_parent_page->GetPageId(), true);  // 新创建的节点不在transaction中，所以需要手动unpin
     // 新创建的父节点没有加锁，别的线程是否有可能拿到该节点？——应该没有可能，因为root_page_latch没有释放
   } else {
     // 发生分裂，并且当前节点不是根节点，则该节点不是安全节点，所以该节点的父节点一定在transaction pageset中
     auto *bpt_internal_page = GetParentPage(GetParentPageId(), transaction);
     // auto *bpt_internal_page = GetParentPage(bpt);
-    if (bpt_internal_page == nullptr) {
-      throw "bad case";
-    }
     assert(bpt_internal_page != nullptr);
     page_id_t parent_page_id =
         bpt_internal_page->Insert(GetPageId(), new_leaf_page->KeyAt(0), new_leaf_page->GetPageId(), transaction, bpt);
@@ -156,13 +152,14 @@ auto B_PLUS_TREE_LEAF_PAGE_TYPE::Insert(const KeyType &key, const ValueType &val
     new_leaf_page->SetParentPageId(parent_page_id);
     // bpt->UnpinPage(bpt_internal_page->GetPageId(), true);
   }
-  // 父节点和孩子节点都会在transaction中进行unpin
   bpt->UnpinPage(new_leaf_page->GetPageId(), true);
+  // 新建节点unpin之后是否有可能被其他线程拿到？——不可能，因为当前节点（当前节点的父节点）的锁没有释放，就拿不到孩子节点
   return true;
 }
 
 INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_LEAF_PAGE_TYPE::InsertOne(const KeyType &key, const ValueType &value, BPT *bpt) {
+  assert(GetSize() != GetMaxSize());
   int pos = LowerBound(key, bpt);
   // 所有元素往后挪
   for (int i = GetSize() - 1; i >= pos; i--) {
@@ -174,12 +171,14 @@ void B_PLUS_TREE_LEAF_PAGE_TYPE::InsertOne(const KeyType &key, const ValueType &
 
 INDEX_TEMPLATE_ARGUMENTS
 auto B_PLUS_TREE_LEAF_PAGE_TYPE::BreakDown(BPT *bpt) -> LeafPage * {
+  // 这个页面已经pin住了，所以可以不用锁
   page_id_t new_leaf_page_id;
   Page *new_page = bpt->NewPage(&new_leaf_page_id);  // TODO(me): 如果分配内存失败（所有可用内存都已使用），应该怎么办？
   assert(new_page != nullptr);
 
   auto *new_leaf_page = reinterpret_cast<LeafPage *>(new_page->GetData());
   assert(new_leaf_page != nullptr);
+
   new_leaf_page->Init(new_leaf_page_id, INVALID_PAGE_ID, bpt->GetLeafMaxSize());
 
   int split_point = GetMinSize();  // 分裂点为数组一半的位置
@@ -209,7 +208,7 @@ auto B_PLUS_TREE_LEAF_PAGE_TYPE::BreakDown(BPT *bpt) -> LeafPage * {
 INDEX_TEMPLATE_ARGUMENTS
 auto B_PLUS_TREE_LEAF_PAGE_TYPE::CreateANewParentPage(BPT *bpt) -> InternalPage * {
   page_id_t new_root_page_id;
-  auto new_page = bpt->NewPage(&new_root_page_id);  // TODO(me): 如果分配内存失败,该如何处理？
+  auto new_page = bpt->NewPage(&new_root_page_id);
   assert(new_page != nullptr);
 
   auto *new_internal_page = reinterpret_cast<InternalPage *>(new_page->GetData());
@@ -257,7 +256,7 @@ auto B_PLUS_TREE_LEAF_PAGE_TYPE::GetParentPage(page_id_t parent_page_id, Transac
 }
 
 INDEX_TEMPLATE_ARGUMENTS
-void B_PLUS_TREE_LEAF_PAGE_TYPE::Remove(const KeyType &key, BPT *bpt) {
+void B_PLUS_TREE_LEAF_PAGE_TYPE::Remove(const KeyType &key, BPT *bpt, Transaction *transaction) {
   int pos = LowerBound(key, bpt);
   // key does's exist
   if (pos == GetSize() || bpt->CompareKey(key, array_[pos].first) != 0) {
@@ -274,19 +273,26 @@ void B_PLUS_TREE_LEAF_PAGE_TYPE::Remove(const KeyType &key, BPT *bpt) {
     return;
   }
 
-  InternalPage *parent_page = GetParentPage(bpt);
   if (GetSize() >= GetMinSize()) {
+    // int child_pos = parent_page->ChildAt(GetPageId());
+    // assert(child_pos != -1);
+    // if (pos == 0 && child_pos > 0) {
+    //   parent_page->SetKeyAt(child_pos, KeyAt(0));
+    // }
     return;
   }
 
+  InternalPage *parent_page = GetParentPage(GetParentPageId(), transaction);
+  assert(parent_page != nullptr);
   page_id_t sabling_page_id;
   bool is_prev;
-  KeyType &split_key = parent_page->GetSablingPageId(GetPageId(), sabling_page_id, is_prev, bpt);
+  KeyType &split_key =
+      parent_page->GetSablingPageId(GetPageId(), sabling_page_id, is_prev, bpt);  // 这个节点可以直接返回LeafPage*
   Page *buffer_page_sabling = bpt->FetchPage(sabling_page_id);
   assert(buffer_page_sabling != nullptr);
+
   buffer_page_sabling->WLatch();
   auto *sabling_page = reinterpret_cast<LeafPage *>(buffer_page_sabling->GetData());
-  assert(sabling_page != nullptr);
 
   // borrow a data from sabling
   if (sabling_page->GetSize() + GetSize() >= GetMaxSize()) {
@@ -302,7 +308,7 @@ void B_PLUS_TREE_LEAF_PAGE_TYPE::Remove(const KeyType &key, BPT *bpt) {
       MappingType first_kv;
       sabling_page->BorrowData(0, first_kv);
       InsertOne(first_kv.first, first_kv.second, bpt);
-      split_key = first_kv.first;
+      split_key = sabling_page->KeyAt(0);  // 巨坑，之前写成了split_key = first_kv.first;
     }
   } else {
     // 往左合并
@@ -318,7 +324,7 @@ void B_PLUS_TREE_LEAF_PAGE_TYPE::Remove(const KeyType &key, BPT *bpt) {
     parent_page->Remove(split_key, bpt);
   }
 
-  bpt->UnpinPage(parent_page->GetPageId(), true);
+  // bpt->UnpinPage(parent_page->GetPageId(), true);
   buffer_page_sabling->WUnlatch();
   bpt->UnpinPage(sabling_page->GetPageId(), true);
 }
@@ -362,6 +368,7 @@ INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_LEAF_PAGE_TYPE::BorrowData(int index, MappingType &data) {
   assert(index < GetSize());
   data = array_[index];
+  // 往前挪
   for (int i = index; i < GetSize() - 1; i++) {
     array_[i] = array_[i + 1];
   }

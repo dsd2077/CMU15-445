@@ -150,11 +150,13 @@ class LRUKReplacer {
   // [[maybe_unused]] size_t current_timestamp_{0};
   size_t curr_size_{0};  // 可替换帧数
   size_t replacer_size_;
-  std::list<std::tuple<frame_id_t, int, bool>>
-      less_than_k_list_;  // 访问频次小于k的列表 tuple<frame_id, 访问次数， 是否可驱逐>
-  std::list<std::tuple<frame_id_t, int, bool>> more_than_k_list_;  // 访问频次大于k的列表
-  std::map<frame_id_t, std::pair<std::list<std::tuple<frame_id_t, int, bool>>::iterator, int>>
-      data_;  // pair<frame_id的迭代器， frame_id在哪一个链表中>  0：less_than_k_list_, 1: more_than_k_list_
+
+  // 访问频次小于k的列表 tuple<frame_id, 访问次数， 是否可驱逐>
+  std::list<std::tuple<frame_id_t, int, bool>> less_than_k_list_;
+  // 访问频次大于k的列表
+  std::list<std::tuple<frame_id_t, int, bool>> more_than_k_list_;
+  // pair<frame_id的迭代器， frame_id在哪一个链表中>  0：less_than_k_list_, 1: more_than_k_list_
+  std::map<frame_id_t, std::pair<std::list<std::tuple<frame_id_t, int, bool>>::iterator, int>> data_;
   size_t k_;
   std::mutex latch_;
 };
