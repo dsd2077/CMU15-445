@@ -87,6 +87,7 @@ class BPlusTree {
   auto DeletePage(page_id_t page_id) -> bool;
 
   auto FindLeaf(const KeyType &key) -> LeafPage *;
+  void ReleaseAllAncestorsLocks(Transaction *transaction, bool is_dirty);
 
  private:
   void CreateANewRootPage();
@@ -100,7 +101,6 @@ class BPlusTree {
   // find the leaf node
   auto FindLeafForSearch(const KeyType &key, bool &root_latch) -> Page *;
   auto FindLeafForInsertAndRemove(const KeyType &key, Transaction *transaction, OpType op_type) -> LeafPage *;
-  void ReleaseAllAncestorsLocks(Transaction *transaction, bool is_dirty);
   auto IsPageSafe(BPlusTreePage *bpt_page, OpType op) -> bool;
 
   // find leaftmost leaf page

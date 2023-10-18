@@ -79,7 +79,7 @@ INDEX_TEMPLATE_ARGUMENTS
 auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::Lookup(const KeyType &key, BPT *bpt) -> page_id_t {
   // 采用二分查找：找到大于等于key值的最小值
   int pos = LowerBound(key, bpt);
-  assert(1 <= pos <= GetSize());
+  assert(1 <= pos && pos <= GetSize());
   if (pos == GetSize()) {
     return array_[GetSize() - 1].second;
   }
@@ -101,6 +101,7 @@ auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::Insert(page_id_t prev, const KeyType &key, 
   KeyType split_key;
   // 假如max_size为3就会存在一边是两个孩子，一边为一个孩子，如果此时新插入的节点插入到2个孩子的节点中，那另外一边就只有一个孩子
   InternalPage *new_internal_page = BreakDown(split_key, bpt);
+  page_id_t new_internal_page_id = new_internal_page->GetPageId();
   // 插入key
   if (bpt->CompareKey(split_key, key) <= 0) {  // 坑：必须有等号
     new_internal_page->InsertOne(prev, key, next, bpt);
@@ -117,28 +118,27 @@ auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::Insert(page_id_t prev, const KeyType &key, 
 
   if (IsRootPage()) {
     InternalPage *new_parent_page = CreateANewParentPage(bpt);
-    new_parent_page->InsertOne(GetPageId(), split_key, new_internal_page->GetPageId(), bpt);
+    new_parent_page->InsertOne(GetPageId(), split_key, new_internal_page_id, bpt);
     new_internal_page->SetParentPageId(new_parent_page->GetPageId());
     bpt->UnpinPage(new_parent_page->GetPageId(), true);  // 新创建的节点，直接unpin
   } else {
     auto *bpt_internal_page = GetParentPage(GetParentPageId(), transaction);
-    // auto *bpt_internal_page = GetParentPage(bpt);
     assert(bpt_internal_page != nullptr);
     page_id_t parent_page_id =
-        bpt_internal_page->Insert(GetPageId(), split_key, new_internal_page->GetPageId(), transaction, bpt);
+        bpt_internal_page->Insert(GetPageId(), split_key, new_internal_page_id, transaction, bpt);
     new_internal_page->SetParentPageId(parent_page_id);
-    // bpt->UnpinPage(bpt_internal_page->GetPageId(), true);
   }
-
-  bpt->UnpinPage(new_internal_page->GetPageId(), true);  // 大坑：新创建的节点必须要unpin
-  return bpt->CompareKey(split_key, key) <= 0 ? new_internal_page->GetPageId() : GetPageId();
+  // 大坑：新创建的节点必须要unpin
+  bpt->UnpinPage(new_internal_page->GetPageId(), true);
+  // 巨坑：如果unpin之后立刻被换出了，那就有问题了
+  return bpt->CompareKey(split_key, key) <= 0 ? new_internal_page_id : GetPageId();
 }
 
 INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_INTERNAL_PAGE_TYPE::InsertOne(page_id_t prev, const KeyType &key, page_id_t next, BPT *bpt) {
   // 插入第一个key时，需要修改前后两个指针
   int pos = LowerBound(key, bpt);
-  assert(1 <= pos <= GetSize());
+  assert(1 <= pos && pos <= GetSize());
   // 所有元素往后挪
   for (int i = GetSize() - 1; i >= pos; i--) {
     array_[i + 1] = array_[i];
@@ -159,6 +159,7 @@ auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::BreakDown(KeyType &split_key, BPT *bpt) -> 
   assert(new_page != nullptr);
 
   auto *new_internal_page = reinterpret_cast<InternalPage *>(new_page->GetData());
+  new_internal_page->SetPageType(IndexPageType::INTERNAL_PAGE);
   new_internal_page->Init(new_internal_page_id, INVALID_PAGE_ID,
                           bpt->GetInternalMaxSize());  // 这里知不知道调用的是哪一个Init函数？
 
@@ -200,40 +201,6 @@ auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::LowerBound(const KeyType &key, BPT *bpt) ->
   return left;
 }
 
-// 如果TryBreak发生了分裂需要unpin原来的节点和新分裂出来的节点
-// INDEX_TEMPLATE_ARGUMENTS
-// auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::TryBreak(const KeyType &key, BPT *bpt) -> InternalPage * {
-//   // 发生分裂
-//   page_id_t new_internal_page_id;
-//   Page *new_page = bpt->NewPage(&new_internal_page_id);
-//   assert(new_page != nullptr);
-
-//   auto *new_internal_page = reinterpret_cast<InternalPage *>(new_page->GetData());
-//   new_internal_page->Init(new_internal_page_id, INVALID_PAGE_ID, bpt->GetInternalMaxSize());
-
-//   int split_point = GetMinSize();
-//   auto split_key = array_[split_point].first;
-
-//   // 将原page的一半转移到新page中,并更新新page所有child page 的父节点指针，指向新page
-//   for (int i = split_point + 1; i < GetSize(); i++) {
-//     new_internal_page->Insert(array_[i - 1].second, array_[i].first, array_[i].second, bpt);
-//   }
-//   new_internal_page->ModifyChildParentPageID(bpt);
-//   SetSize(GetMinSize());
-
-//   auto *parent_page = GetStableParentPage(split_key, bpt);
-//   parent_page->Insert(GetPageId(), split_key, new_internal_page_id, bpt);
-//   new_internal_page->SetParentPageId(parent_page->GetPageId());
-
-//   bpt->UnpinPage(parent_page->GetPageId(), true);
-//   if (bpt->CompareKey(split_key, key) < 0) {
-//     bpt->UnpinPage(GetPageId(), true);
-//     return new_internal_page;
-//   }
-//   bpt->UnpinPage(new_internal_page->GetPageId(), true);
-//   return this;
-// }
-
 INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_INTERNAL_PAGE_TYPE::ModifyChildParentPageID(BPT *bpt) {
   for (int i = 0; i < GetSize(); i++) {
@@ -260,17 +227,6 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::ModifyChildParentPageID(page_id_t child_pag
   page->SetParentPageId(parent_page_id);
   bpt->UnpinPage(child_page->GetPageId(), true);
 }
-
-// INDEX_TEMPLATE_ARGUMENTS
-// auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::GetStableParentPage(const KeyType &key, BPT *bpt) -> InternalPage * {
-//   if (IsRootPage()) {
-//     return CreateANewParentPage(bpt);
-//   }
-//   InternalPage *parent_page = GetParentPage(bpt);
-//   parent_page = parent_page->TryBreak(key, bpt);
-
-//   return parent_page;
-// }
 
 INDEX_TEMPLATE_ARGUMENTS
 // 父节点存在——获取当前节点的父节点
@@ -313,11 +269,9 @@ auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::GetParentPage(page_id_t parent_page_id, Tra
 INDEX_TEMPLATE_ARGUMENTS
 auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::CreateANewParentPage(BPT *bpt) -> InternalPage * {
   page_id_t new_root_page_id;
-  auto new_page = bpt->NewPage(&new_root_page_id);  // TODO(me): 如果分配内存失败,该如何处理？
+  auto new_page = bpt->NewPage(&new_root_page_id);
   assert(new_page != nullptr);
-
   auto *new_internal_page = reinterpret_cast<InternalPage *>(new_page->GetData());
-  assert(new_internal_page != nullptr);
 
   new_internal_page->Init(new_root_page_id, INVALID_PAGE_ID, bpt->GetInternalMaxSize());
 
@@ -472,16 +426,6 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::AppendPairs(InternalPage *sabling_page, Key
 // 头部插入
 INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_INTERNAL_PAGE_TYPE::HeadInsertPairs(InternalPage *sabling_page, KeyType &split_key, BPT *bpt) {
-  // int size = GetSize();
-  // int sabling_size = sabling_page->GetSize();
-  // for (int i = sabling_size - 1; i >= 0; i--) {
-  //   sabling_page->array_[i + size] = sabling_page->array_[i];  // 原来的元素向后挪动
-  // }
-  // for (int i = 0; i < size; i++) {
-  //   sabling_page->array_[i] = array_[i];  // 左边的元素往右挪
-  // }
-  // sabling_page->array_[size].first = split_key;
-
   InsertOne(array_[GetSize() - 1].second, split_key, sabling_page->array_[0].second, bpt);
   for (int i = 1; i < sabling_page->GetSize(); i++) {
     InsertOne(array_[i - 1].second, sabling_page->array_[i].first, sabling_page->array_[i].second, bpt);
@@ -489,16 +433,9 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::HeadInsertPairs(InternalPage *sabling_page,
   ModifyChildParentPageID(bpt);
 }
 
-// INDEX_TEMPLATE_ARGUMENTS
-// void B_PLUS_TREE_INTERNAL_PAGE_TYPE::SwapVriables(InternalPage *sabling_page) {
-//   InternalPage temp = *this;
-//   *this = *sabling_page;
-//   *sabling_page = temp;
-// }
-
 INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_INTERNAL_PAGE_TYPE::BorrowDataFromLeft(int index, MappingType &data) {
-  assert(0 < index < GetSize());
+  assert(0 < index && index < GetSize());
   data = array_[index];
   for (int i = index; i < GetSize() - 1; i++) {
     array_[i] = array_[i + 1];
@@ -517,14 +454,6 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::BorrowDataFromRight(MappingType &data) {
   }
   SetSize(GetSize() - 1);
 }
-
-// INDEX_TEMPLATE_ARGUMENTS
-// auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::GetSablingPage(page_id_t page_id, BPT *bpt) -> InternalPage * {
-//   assert(page_id != INVALID_PAGE_ID);
-//   auto *sabling_page = reinterpret_cast<InternalPage *>(bpt->FetchPage(page_id)->GetData());
-//   assert(sabling_page != nullptr);
-//   return sabling_page;
-// }
 
 // valuetype for internalNode should be page id_t
 template class BPlusTreeInternalPage<GenericKey<4>, page_id_t, GenericComparator<4>>;

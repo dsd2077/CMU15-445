@@ -98,7 +98,7 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
   }
 
   auto *bpt_leaf_page = FindLeafForInsertAndRemove(key, transaction, OpType::INSERT);
-  bool res = bpt_leaf_page->Insert(key, value, this, transaction);
+    bool res = bpt_leaf_page->Insert(key, value, this, transaction);
   ReleaseAllAncestorsLocks(transaction, true);
   // LOG_DEBUG("insert ", key.ToString());
   // std::cout << "Thread " << std::this_thread::get_id() << " insert " << key << " success" << std::endl;
@@ -153,10 +153,10 @@ void BPLUSTREE_TYPE::Remove(const KeyType &key, Transaction *transaction) {
   transaction->AddIntoPageSet(nullptr);
 
   LeafPage *bpt_leaf_page = FindLeafForInsertAndRemove(key, transaction, OpType::DELETE);
-  bpt_leaf_page->Remove(key, this, transaction);
+    bpt_leaf_page->Remove(key, this, transaction);
 
   ReleaseAllAncestorsLocks(transaction, true);
-
+  
   // 一把大锁
   // if (IsEmpty()) {
   //   return;
@@ -165,7 +165,7 @@ void BPLUSTREE_TYPE::Remove(const KeyType &key, Transaction *transaction) {
   // LeafPage *bpt_leaf_page = FindLeaf(key);
   // bpt_leaf_page->Remove(key, this);
   // UnpinPage(bpt_leaf_page->GetPageId(), true);
-  // root_page_id_latch_.WUnlock();
+// root_page_id_latch_.WUnlock();
 }
 
 /*****************************************************************************
@@ -324,43 +324,32 @@ INDEX_TEMPLATE_ARGUMENTS
 auto BPLUSTREE_TYPE::FindLeafForInsertAndRemove(const KeyType &key, Transaction *transaction, OpType op_type)
     -> LeafPage * {
   // 必须对root_page_id进行互斥访问，否则有可能其他线程对它进行修改
-  Page *root_page = buffer_pool_manager_->FetchPage(root_page_id_);
-  assert(root_page != nullptr);
-  root_page->WLatch();  // 先锁根节点
-  transaction->AddIntoPageSet(root_page);
-
-  Page *buffer_page_parent = root_page;  // 缓存池中的page
+  Page *buffer_page_parent = buffer_pool_manager_->FetchPage(root_page_id_);  // 缓存池中的page
+  assert(buffer_page_parent != nullptr);
   auto *bpt_page_cur = reinterpret_cast<BPlusTreePage *>(buffer_page_parent->GetData());
 
-  // 循环检测是否为根节点
-  // Page *root_page = buffer_pool_manager_->FetchPage(root_page_id_);
-  // root_page->WLatch();  // 先锁根节点
-  // assert(root_page != nullptr);
-  // auto *bpt_page_cur = reinterpret_cast<BPlusTreePage *>(root_page->GetData());
-  // while (!bpt_page_cur->IsRootPage()) {
-  //   root_page->WUnlatch();
-  //   root_page = buffer_pool_manager_->FetchPage(root_page_id_);
-  //   root_page->WLatch();
-  //   bpt_page_cur = reinterpret_cast<BPlusTreePage *>(root_page->GetData());
-  // }
-  // transaction->AddIntoPageSet(root_page);
-  // Page *buffer_page_parent = root_page;  // 缓存池中的page
+  buffer_page_parent->WLatch();  // 先锁根节点
+  if (IsPageSafe(bpt_page_cur, op_type)) {
+    ReleaseAllAncestorsLocks(transaction, false);
+  }
+  transaction->AddIntoPageSet(buffer_page_parent);
 
   while (!bpt_page_cur->IsLeafPage()) {
     auto *internal_page = reinterpret_cast<InternalPage *>(bpt_page_cur);
     auto next_page_id = internal_page->Lookup(key, this);
+    assert(next_page_id > 0);
+
     Page *buffer_page_child = buffer_pool_manager_->FetchPage(next_page_id);
     assert(buffer_page_child != nullptr);
-
     auto *bpt_page_child = reinterpret_cast<BPlusTreePage *>(buffer_page_child->GetData());
 
     // 先锁孩子节点，再解锁父节点
     buffer_page_child->WLatch();
-    // 孩子节点安全，可以释放所有的祖先节点
+        // 孩子节点安全，可以释放所有的祖先节点
     if (IsPageSafe(bpt_page_child, op_type)) {
       ReleaseAllAncestorsLocks(transaction, false);
     }
-    transaction->AddIntoPageSet(buffer_page_child);
+transaction->AddIntoPageSet(buffer_page_child);
 
     buffer_page_parent = buffer_page_child;
     bpt_page_cur = bpt_page_child;
