@@ -48,7 +48,6 @@ void BufferPoolManagerInstance::ResetPage(frame_id_t frame_id, page_id_t page_id
   pages_[frame_id].page_id_ = page_id;
   pages_[frame_id].pin_count_ = 0;
   pages_[frame_id].is_dirty_ = false;
-  replacer_->SetEvictable(frame_id, true);
 }
 
 auto BufferPoolManagerInstance::EvictFrame(frame_id_t *frame_id) -> bool {
@@ -189,13 +188,12 @@ auto BufferPoolManagerInstance::DeletePgImp(page_id_t page_id) -> bool {
   if (pages_[frame_id].GetPinCount() > 0) {
     return false;
   }
-  page_table_->Remove(page_id);
-  replacer_->Remove(frame_id);
   if (pages_[frame_id].IsDirty()) {
     disk_manager_->WritePage(page_id, pages_[frame_id].GetData());
   }
-  // 重置内存以及元数据
   ResetPage(frame_id, INVALID_PAGE_ID);
+  page_table_->Remove(page_id);
+  replacer_->Remove(frame_id);
 
   free_list_.push_back(frame_id);
   DeallocatePage(page_id);

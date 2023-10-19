@@ -86,11 +86,10 @@ class BPlusTree {
   void UnpinPage(page_id_t page_id, bool is_dirty);
   auto DeletePage(page_id_t page_id) -> bool;
 
-  auto FindLeaf(const KeyType &key) -> LeafPage *;
   void ReleaseAllAncestorsLocks(Transaction *transaction, bool is_dirty);
 
  private:
-  void CreateANewRootPage();
+  void CreateANewRootPage(const KeyType &key, const ValueType &value);
   void UpdateRootPageId(
       int insert_record = 0);  // 为什么这个函数是一个私有函数呢？——在SetRootPageId中调用该函数就可以了
   /* Debug Routines for FREE!! */
@@ -99,13 +98,11 @@ class BPlusTree {
   void ToString(BPlusTreePage *page, BufferPoolManager *bpm) const;
 
   // find the leaf node
+  auto FindLeafOptimistically(const KeyType &key, OpType op_type, bool left_most = false, bool right_most = false)
+      -> Page *;
   auto FindLeafForSearch(const KeyType &key, bool &root_latch) -> Page *;
-  auto FindLeafForInsertAndRemove(const KeyType &key, Transaction *transaction, OpType op_type) -> LeafPage *;
+  auto FindLeafPessimically(const KeyType &key, Transaction *transaction, OpType op_type) -> LeafPage *;
   auto IsPageSafe(BPlusTreePage *bpt_page, OpType op) -> bool;
-
-  // find leaftmost leaf page
-  auto FindLeftMostLeafPage() -> Page *;
-  auto FindRightMostLeafPage() -> Page *;
 
   // member variable
   std::string index_name_;

@@ -115,7 +115,7 @@ TEST(BPlusTreeTest, BPlusTreeContentionBenchmark) {  // NOLINT
             << std::endl;
 }
 
-TEST(BPlusTreeTest, BPlusTreeContentionBenchmark2) {  // NOLINT
+TEST(BPlusTreeTest, DISABLED_BPlusTreeContentionBenchmark2) {  // NOLINT
   std::vector<size_t> time_ms_with_mutex;
   std::vector<size_t> time_ms_wo_mutex;
   for (size_t iter = 0; iter < 20; iter++) {

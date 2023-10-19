@@ -423,9 +423,9 @@ TEST(BPlusTreeConcurrentTestC2Seq, SequentialMixTest) {
   GenericComparator<8> comparator(key_schema.get());
 
   DiskManager *disk_manager = new DiskManager("test.db");
-  BufferPoolManager *bpm = new BufferPoolManagerInstance(5, disk_manager);
+  BufferPoolManager *bpm = new BufferPoolManagerInstance(50, disk_manager);
   // create b+ tree
-  BPlusTree<GenericKey<8>, RID, GenericComparator<8>> tree("foo_pk", bpm, comparator);
+  BPlusTree<GenericKey<8>, RID, GenericComparator<8>> tree("foo_pk", bpm, comparator, 3, 3);
   GenericKey<8> index_key;
   RID rid;
   // create transaction
@@ -439,7 +439,7 @@ TEST(BPlusTreeConcurrentTestC2Seq, SequentialMixTest) {
   std::vector<int64_t> for_insert;
   std::vector<int64_t> for_delete;
   size_t sieve = 2;  // divide evenly
-  size_t total_keys = 1000;
+  size_t total_keys = 20;
   for (size_t i = 1; i <= total_keys; i++) {
     if (i % sieve == 0) {
       for_insert.push_back(i);

@@ -82,7 +82,7 @@ class BPlusTreeInternalPage : public BPlusTreePage {
   // 寻找大于等于key值的最小元素的位置
   auto LowerBound(const KeyType &key, BPT *bpt) -> int;
 
-  void Remove(const KeyType &delete_key, BPT *bpt);
+  void Remove(const KeyType &delete_key, BPT *bpt, Transaction *transaction);
   // delete相关helper函数
 
   // 通过父节点获取当前节点的兄弟节点

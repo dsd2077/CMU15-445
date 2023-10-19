@@ -75,6 +75,8 @@ class BPlusTreeLeafPage : public BPlusTreePage {
   // 插入叶结点
   // 插入成功返回true, 否则返回false
   auto Insert(const KeyType &key, const ValueType &value, BPT *bpt, Transaction *transaction) -> bool;
+  // InsertOne与Insert相比：1、总是插入(不考虑重复插入)  2、不考虑分裂
+  void InsertOne(const KeyType &key, const ValueType &value, BPT *bpt);
 
   // 叶结点发生分裂
   auto BreakDown(BPT *bpt) -> LeafPage *;
@@ -97,11 +99,6 @@ class BPlusTreeLeafPage : public BPlusTreePage {
   // 将当前节点中的所有KV pair全部插入到sabling节点中
   void MergeSablingIsPrev(LeafPage *sabling_page, BPT *bpt);
   void MergeSablingIsPost(LeafPage *sabling_page, BPT *bpt);
-
-  // helper function
- private:
-  // InsertOne与Insert相比：1、总是插入(不考虑重复插入)  2、不考虑分裂
-  void InsertOne(const KeyType &key, const ValueType &value, BPT *bpt);
 
  private:
   page_id_t next_page_id_;

@@ -140,7 +140,7 @@ auto B_PLUS_TREE_LEAF_PAGE_TYPE::Insert(const KeyType &key, const ValueType &val
   } else {
     // 发生分裂，并且当前节点不是根节点，则该节点不是安全节点，所以该节点的父节点一定在transaction pageset中
     auto *bpt_internal_page = GetParentPage(GetParentPageId(), transaction);
-// auto *bpt_internal_page = GetParentPage(bpt);
+    // auto *bpt_internal_page = GetParentPage(bpt);
     assert(bpt_internal_page != nullptr);
     page_id_t parent_page_id =
         bpt_internal_page->Insert(GetPageId(), new_leaf_page->KeyAt(0), new_leaf_page->GetPageId(), transaction, bpt);
@@ -287,7 +287,7 @@ void B_PLUS_TREE_LEAF_PAGE_TYPE::Remove(const KeyType &key, BPT *bpt, Transactio
   auto *sabling_page = reinterpret_cast<LeafPage *>(buffer_page_sabling->GetData());
 
   // borrow a data from sabling
-  if (sabling_page->GetSize() + GetSize() >= GetMaxSize()) {
+  if (sabling_page->GetSize() + GetSize() >= GetMaxSize()) {  // 叶子结点可以相等，非叶子结点不能
     // sabling 结点为前驱
     if (is_prev) {
       // delete the last elem in sabling node
@@ -307,16 +307,17 @@ void B_PLUS_TREE_LEAF_PAGE_TYPE::Remove(const KeyType &key, BPT *bpt, Transactio
     if (is_prev) {
       MergeSablingIsPrev(sabling_page, bpt);
       sabling_page->SetNextPageId(GetNextPageId());
-      bpt->DeletePage(GetPageId());
+      // bpt->DeletePage(GetPageId());       // 巨坑，这里还不能删除，因为叶结点的锁还没有释放，还没有unpin
+      transaction->AddIntoDeletedPageSet(GetPageId());
     } else {
       MergeSablingIsPost(sabling_page, bpt);
       SetNextPageId(sabling_page->GetNextPageId());
-      bpt->DeletePage(sabling_page->GetPageId());
+      // bpt->DeletePage(sabling_page->GetPageId());
+      transaction->AddIntoDeletedPageSet(sabling_page->GetPageId());
     }
-    parent_page->Remove(split_key, bpt);
+    parent_page->Remove(split_key, bpt, transaction);
   }
 
-  // bpt->UnpinPage(parent_page->GetPageId(), true);
   buffer_page_sabling->WUnlatch();
   bpt->UnpinPage(sabling_page->GetPageId(), true);
 }

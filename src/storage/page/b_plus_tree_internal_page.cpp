@@ -281,7 +281,7 @@ auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::CreateANewParentPage(BPT *bpt) -> InternalP
 }
 
 INDEX_TEMPLATE_ARGUMENTS
-void B_PLUS_TREE_INTERNAL_PAGE_TYPE::Remove(const KeyType &delete_key, BPT *bpt) {
+void B_PLUS_TREE_INTERNAL_PAGE_TYPE::Remove(const KeyType &delete_key, BPT *bpt, Transaction *transaction) {
   int pos = LowerBound(delete_key, bpt);
   // 元素不存在
   if (pos == GetSize() || bpt->CompareKey(array_[pos].first, delete_key) != 0) {
@@ -302,12 +302,13 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::Remove(const KeyType &delete_key, BPT *bpt)
     if (GetSize() == 1) {
       bpt->SetRootPageId(array_[0].second);
       ModifyChildParentPageID(array_[0].second, INVALID_PAGE_ID, bpt);  // 坑
-      bpt->DeletePage(GetPageId());
+      // bpt->DeletePage(GetPageId());
+      transaction->AddIntoDeletedPageSet(GetPageId());
     }
     return;
   }
 
-  InternalPage *parent_page = GetParentPage(bpt);
+  InternalPage *parent_page = GetParentPage(GetParentPageId(), transaction);
   page_id_t sabling_page_id;
   bool is_prev;
   KeyType &split_key = parent_page->GetSablingPageId(GetPageId(), sabling_page_id, is_prev, bpt);
@@ -331,6 +332,7 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::Remove(const KeyType &delete_key, BPT *bpt)
       array_[0].second = last_kv.second;
       int first = 1;
       array_[first].first = split_key;
+      SetSize(GetSize() + 1);  // 坑： 没有更新大小
 
       // 修改父节点
       split_key = last_kv.first;
@@ -350,15 +352,16 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::Remove(const KeyType &delete_key, BPT *bpt)
     // 合并
     if (is_prev) {
       AppendPairs(sabling_page, split_key, bpt);
-      bpt->DeletePage(GetPageId());
+      // bpt->DeletePage(GetPageId());
+      transaction->AddIntoDeletedPageSet(GetPageId());
     } else {
       HeadInsertPairs(sabling_page, split_key, bpt);
-      bpt->DeletePage(sabling_page->GetPageId());
+      // bpt->DeletePage(sabling_page->GetPageId());
+      transaction->AddIntoDeletedPageSet(sabling_page->GetPageId());
     }
-    parent_page->Remove(split_key, bpt);
+    parent_page->Remove(split_key, bpt, transaction);
   }
 
-  bpt->UnpinPage(parent_page->GetPageId(), true);
   buffer_page_sabling->WUnlatch();
   bpt->UnpinPage(sabling_page->GetPageId(), true);
 }

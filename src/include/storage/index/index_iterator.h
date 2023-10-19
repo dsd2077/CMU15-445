@@ -27,7 +27,7 @@ class IndexIterator {
 
   // you may define your own constructor based on your member variables
   IndexIterator() = default;
-  IndexIterator(BPT *bpt, LeafPage *leaf_page, int pos);
+  IndexIterator(BPT *bpt, Page *buffer_page, LeafPage *bpt_page, int pos);
   // 复制构造函数
   IndexIterator(const IndexIterator &other) = default;
   ~IndexIterator();  // NOLINT
@@ -40,17 +40,18 @@ class IndexIterator {
 
   // TODO(me) : 为什么这两个函数的实现放在头文件中？
   auto operator==(const IndexIterator &itr) const -> bool {
-    return (this->leaf_page_ == itr.leaf_page_ && this->current_ == itr.current_);
+    return (this->bpt_page_ == itr.bpt_page_ && this->current_ == itr.current_);
   }
 
   auto operator!=(const IndexIterator &itr) const -> bool {
-    return (this->leaf_page_ != itr.leaf_page_ || this->current_ != itr.current_);
+    return (this->bpt_page_ != itr.bpt_page_ || this->current_ != itr.current_);
   }
 
  private:
   // add your own private member variables here
   BPT *bpt_;
-  LeafPage *leaf_page_;
+  Page *buffer_page_;
+  LeafPage *bpt_page_;
   int current_;
 };
 
