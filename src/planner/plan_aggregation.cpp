@@ -131,7 +131,7 @@ auto Planner::PlanSelectAgg(const SelectStatement &statement, AbstractPlanNodeRe
     term_idx += 1;
   }
 
-  auto agg_output_schema = AggregationPlanNode::InferAggSchema(group_by_exprs, input_exprs, agg_types);
+  auto agg_output_schema = AggregationPlanNode::InferAggSchema(group_by_exprs, input_exprs, agg_types);   // 应该是将group_by_exprs放前面，agg_types放后面
 
   // Create the aggregation plan node for the first phase (finally!)
   AbstractPlanNodeRef plan = std::make_shared<AggregationPlanNode>(

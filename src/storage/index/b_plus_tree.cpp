@@ -50,7 +50,7 @@ auto BPLUSTREE_TYPE::IsEmpty() -> bool {
  * This method is used for point query
  * @return : true means key exists
  */
-// TODO(me) : 为什么result用vector来接收？
+// TODO(me) : 为什么result用vector来接收？——为了将来支持重复索引
 INDEX_TEMPLATE_ARGUMENTS
 auto BPLUSTREE_TYPE::GetValue(const KeyType &key, std::vector<ValueType> *result, Transaction *transaction) -> bool {
   if (IsEmpty()) {
@@ -64,7 +64,9 @@ auto BPLUSTREE_TYPE::GetValue(const KeyType &key, std::vector<ValueType> *result
   auto bplus_leaf_page = reinterpret_cast<LeafPage *>(page);
   ValueType v;
   bool is_existed = bplus_leaf_page->Lookup(key, v, this);
-  result->push_back(v);
+  if (is_existed) {
+    result->push_back(v);
+  }
 
   // You have to release the latch on that page before you unpin the same page from the buffer pool.
   page->RUnlatch();
