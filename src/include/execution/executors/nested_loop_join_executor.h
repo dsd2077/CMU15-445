@@ -52,22 +52,22 @@ class NestedLoopJoinExecutor : public AbstractExecutor {
   /** @return The output schema for the insert */
   auto GetOutputSchema() const -> const Schema & override { return plan_->OutputSchema(); };
 
-private:
- auto ConstructJoinTuple() -> Tuple;
- auto ConstructNullJoinTuple() -> Tuple;
+ private:
+  auto ConstructJoinTuple() -> Tuple;
+  auto ConstructNullJoinTuple() -> Tuple;
 
-private:
- /** The NestedLoopJoin plan node to be executed. */
- const NestedLoopJoinPlanNode *plan_;
- std::unique_ptr<AbstractExecutor> left_child_;
- std::unique_ptr<AbstractExecutor> right_child_;
+ private:
+  /** The NestedLoopJoin plan node to be executed. */
+  const NestedLoopJoinPlanNode *plan_;
+  std::unique_ptr<AbstractExecutor> left_child_;
+  std::unique_ptr<AbstractExecutor> right_child_;
 
- Tuple left_tuple_;
- Tuple right_tuple_;
- bool left_step_ = true;
- bool is_left_matched_ = false;
- bool right_step = true;
- const AbstractExpression &join_predicate_;
+  Tuple left_tuple_;
+  Tuple right_tuple_;
+  bool left_step_ = true;
+  bool is_left_matched_ = false;
+  bool right_step_ = true;
+  const AbstractExpression &join_predicate_;
 };
 
 }  // namespace bustub

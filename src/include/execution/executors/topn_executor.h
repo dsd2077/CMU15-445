@@ -52,5 +52,8 @@ class TopNExecutor : public AbstractExecutor {
  private:
   /** The topn plan node to be executed */
   const TopNPlanNode *plan_;
+  std::unique_ptr<AbstractExecutor> child_executor_;
+  std::vector<Tuple> top_n_;
+  std::vector<Tuple>::iterator iter_;
 };
 }  // namespace bustub

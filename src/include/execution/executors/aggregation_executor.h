@@ -72,7 +72,9 @@ class SimpleAggregationHashTable {
    */
   void CombineAggregateValues(AggregateValue *result, const AggregateValue &input) {
     for (uint32_t i = 0; i < agg_exprs_.size(); i++) {
-      if (input.aggregates_[i].IsNull()) continue;
+      if (input.aggregates_[i].IsNull()) {
+        continue;
+      }
       switch (agg_types_[i]) {
         case AggregationType::CountStarAggregate: {
           result->aggregates_[i] = result->aggregates_[i].Add(input.aggregates_[i]);
@@ -219,14 +221,15 @@ class AggregationExecutor : public AbstractExecutor {
     for (const auto &expr : plan_->GetGroupBys()) {
       keys.emplace_back(expr->Evaluate(tuple, child_->GetOutputSchema()));
     }
-    return {keys};    // 如果没有group by,所有值放在一起比较
+    return {keys};  // 如果没有group by,所有值放在一起比较
   }
 
   /** @return The tuple as an AggregateValue */
   auto MakeAggregateValue(const Tuple *tuple) -> AggregateValue {
     std::vector<Value> vals;
     for (const auto &expr : plan_->GetAggregates()) {
-      vals.emplace_back(expr->Evaluate(tuple, child_->GetOutputSchema()));    // 为什么不将Count(id)识别为Constant_value_expr
+      vals.emplace_back(
+          expr->Evaluate(tuple, child_->GetOutputSchema()));  // 为什么不将Count(id)识别为Constant_value_expr
     }
     return {vals};
   }
@@ -240,6 +243,6 @@ class AggregationExecutor : public AbstractExecutor {
   SimpleAggregationHashTable aht_;
   /** Simple aggregation hash table iterator */
   SimpleAggregationHashTable::Iterator aht_iterator_;
-  bool is_empty_res = true;
+  bool is_empty_res_ = true;
 };
 }  // namespace bustub

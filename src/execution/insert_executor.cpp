@@ -20,12 +20,12 @@ InsertExecutor::InsertExecutor(ExecutorContext *exec_ctx, const InsertPlanNode *
                                std::unique_ptr<AbstractExecutor> &&child_executor)
     : AbstractExecutor(exec_ctx), plan_(plan), child_executor_(std::move(child_executor)) {}
 
-void InsertExecutor::Init() { 
-  child_executor_->Init();
-}
+void InsertExecutor::Init() { child_executor_->Init(); }
 
 auto InsertExecutor::Next(Tuple *tuple, RID *rid) -> bool {
-  if (all_done) return false;
+  if (all_done_) {
+    return false;
+  }
   // 将所有元素插入，然后返回false
   Tuple child_tuple{};
   int count = 0;
@@ -36,13 +36,14 @@ auto InsertExecutor::Next(Tuple *tuple, RID *rid) -> bool {
     count++;
     for (auto index_info : indexs) {
       // 提取出索引字段
-      Tuple key_tuple = child_tuple.KeyFromTuple(table->schema_, index_info->key_schema_, index_info->index_->GetKeyAttrs());
+      Tuple key_tuple =
+          child_tuple.KeyFromTuple(table->schema_, index_info->key_schema_, index_info->index_->GetKeyAttrs());
       index_info->index_->InsertEntry(key_tuple, *rid, exec_ctx_->GetTransaction());
     }
   }
 
   *tuple = Tuple{{Value(TypeId::INTEGER, count)}, &GetOutputSchema()};
-  all_done = true;
-  return true; 
+  all_done_ = true;
+  return true;
 }
 }  // namespace bustub

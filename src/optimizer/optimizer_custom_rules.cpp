@@ -9,7 +9,7 @@ namespace bustub {
 
 auto Optimizer::OptimizeCustom(const AbstractPlanNodeRef &plan) -> AbstractPlanNodeRef {
   auto p = plan;
-  p = OptimizeMergeProjection(p);
+  p = OptimizeMergeProjection(p);  // 将映射下推
   p = OptimizeMergeFilterNLJ(p);
   p = OptimizeNLJAsIndexJoin(p);
   // p = OptimizeNLJAsHashJoin(p);  // Enable this rule after you have implemented hash join.

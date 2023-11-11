@@ -31,13 +31,13 @@ NestedLoopJoinExecutor::NestedLoopJoinExecutor(ExecutorContext *exec_ctx, const 
   }
 }
 
-void NestedLoopJoinExecutor::Init() { 
- left_child_->Init();
- left_tuple_ = Tuple();
- right_tuple_ = Tuple();
- left_step_ = true;
- is_left_matched_ = false;
- right_step = true;
+void NestedLoopJoinExecutor::Init() {
+  left_child_->Init();
+  left_tuple_ = Tuple();
+  right_tuple_ = Tuple();
+  left_step_ = true;
+  is_left_matched_ = false;
+  right_step_ = true;
 }
 
 auto NestedLoopJoinExecutor::ConstructJoinTuple() -> Tuple {
@@ -63,26 +63,27 @@ auto NestedLoopJoinExecutor::ConstructNullJoinTuple() -> Tuple {
   return {values, &plan_->OutputSchema()};
 }
 
-
-auto NestedLoopJoinExecutor::Next(Tuple *tuple, RID *rid) -> bool { 
-  while (1) {
+auto NestedLoopJoinExecutor::Next(Tuple *tuple, RID *rid) -> bool {
+  while (true) {
     // 外表取下一行数据
     if (left_step_) {
       left_step_ = false;
-      if (!left_child_->Next(&left_tuple_, rid)) return false;  // 外表遍历完
+      if (!left_child_->Next(&left_tuple_, rid)) {
+        return false;  // 外表遍历完
+      }
       right_child_->Init();
     }
 
-    while ((right_step = right_child_->Next(&right_tuple_, rid))) {
+    while ((right_step_ = right_child_->Next(&right_tuple_, rid))) {
       Value value = join_predicate_.EvaluateJoin(&left_tuple_, left_child_->GetOutputSchema(), &right_tuple_,
                                                  right_child_->GetOutputSchema());
       if (!value.IsNull() && value.GetAs<bool>()) {
         is_left_matched_ = true;
         *tuple = ConstructJoinTuple();
         return true;
-      } 
+      }
     }
-    if (!right_step) {
+    if (!right_step_) {
       left_step_ = true;
       // 左外连接：如果外表的某一行没有匹配到任何一行内表数据，需要补充一行空值数据
       if (plan_->GetJoinType() == JoinType::LEFT && !is_left_matched_) {

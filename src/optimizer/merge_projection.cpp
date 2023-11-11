@@ -12,7 +12,7 @@ namespace bustub {
 auto Optimizer::OptimizeMergeProjection(const AbstractPlanNodeRef &plan) -> AbstractPlanNodeRef {
   std::vector<AbstractPlanNodeRef> children;
   for (const auto &child : plan->GetChildren()) {
-    children.emplace_back(OptimizeMergeProjection(child));
+    children.emplace_back(OptimizeMergeProjection(child));  // 递归调用
   }
   auto optimized_plan = plan->CloneWithChildren(std::move(children));
 
