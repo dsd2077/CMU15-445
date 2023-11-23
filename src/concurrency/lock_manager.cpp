@@ -21,7 +21,7 @@ auto LockManager::LockTable(Transaction *txn, LockMode lock_mode, const table_oi
   // 0.检查事务的状态
   auto state = txn->GetState();
   if (state != TransactionState::GROWING && state != TransactionState::SHRINKING) {
-    throw TransactionAbortException(txn->GetTransactionId(), AbortReason::ATTEMPTED_INTENTION_LOCK_ON_ROW);
+    return false;
   }
 
   // 1.根据隔离级别判断锁请求是否合理
@@ -437,12 +437,12 @@ auto LockManager::TryUpgradeLock(Transaction *txn, const table_oid_t &oid, LockM
   LockMode current_lock_mode = GetTableLockMode(txn, oid);
   // TODO(dsd) : 当一个事务有更高级别的锁时，是不是可以不用加锁了？
   // 当一个事务拥有更高级的锁，再去加低级的锁时，要抛出异常，也就是只能锁升级不能降级。为什么？
-  if (HasHigherLevelLock(current_lock_mode, lock_mode)) {
-    return true;
-  }
-  // if (current_lock_mode == lock_mode) {
+  // if (HasHigherLevelLock(current_lock_mode, lock_mode)) {
   //   return true;
   // }
+  if (current_lock_mode == lock_mode) {
+    return true;
+  }
   // Check for valid lock upgrade paths
   try {
     CheckValidUpgrade(txn, current_lock_mode, lock_mode);
