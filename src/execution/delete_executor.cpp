@@ -23,7 +23,6 @@ DeleteExecutor::DeleteExecutor(ExecutorContext *exec_ctx, const DeletePlanNode *
 
 void DeleteExecutor::Init() {
   child_executor_->Init();
-  // delete下层算子一定是seq_scan，所以直接加SIX锁
   table_info_ = exec_ctx_->GetCatalog()->GetTable(plan_->table_oid_);
   try {
     exec_ctx_->GetLockManager()->LockTable(exec_ctx_->GetTransaction(), LockManager::LockMode::INTENTION_EXCLUSIVE,

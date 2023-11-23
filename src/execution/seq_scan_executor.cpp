@@ -68,6 +68,7 @@ auto SeqScanExecutor::Next(Tuple *tuple, RID *rid) -> bool {
 
   *tuple = *table_iter_;
   *rid = table_iter_->GetRid();
+  // 读之后解锁
   try {
     if (exec_ctx_->GetTransaction()->GetIsolationLevel() == IsolationLevel::READ_COMMITTED) {
       exec_ctx_->GetLockManager()->UnlockRow(exec_ctx_->GetTransaction(), table_info_->oid_, table_iter_->GetRid());

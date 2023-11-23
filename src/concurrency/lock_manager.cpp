@@ -343,7 +343,8 @@ void LockManager::RunCycleDetection() {
     }
     txn_id_t youngest_txn;
     // 如果有环，将最年轻的事务Abort掉
-    if (HasCycle(&youngest_txn)) {
+    // 坑：这里应该采用while而不是if,要打破图中所有的环
+    while (HasCycle(&youngest_txn)) {
       // assert(txns_.find(youngest_txn) != txns_.end());
       TransactionManager::GetTransaction(youngest_txn)->SetState(TransactionState::ABORTED);
       // 找到该事务所阻塞的表队列，将队列唤醒
@@ -363,6 +364,7 @@ void LockManager::RunCycleDetection() {
           request_que->cv_.notify_all();
         }
       }
+      waits_for_.erase(youngest_txn);
     }
 
     waits_for_.clear();
@@ -437,12 +439,12 @@ auto LockManager::TryUpgradeLock(Transaction *txn, const table_oid_t &oid, LockM
   LockMode current_lock_mode = GetTableLockMode(txn, oid);
   // TODO(dsd) : 当一个事务有更高级别的锁时，是不是可以不用加锁了？
   // 当一个事务拥有更高级的锁，再去加低级的锁时，要抛出异常，也就是只能锁升级不能降级。为什么？
-  // if (HasHigherLevelLock(current_lock_mode, lock_mode)) {
-  //   return true;
-  // }
-  if (current_lock_mode == lock_mode) {
+  if (HasHigherLevelLock(current_lock_mode, lock_mode)) {
     return true;
   }
+  // if (current_lock_mode == lock_mode) {
+  //   return true;
+  // }
   // Check for valid lock upgrade paths
   try {
     CheckValidUpgrade(txn, current_lock_mode, lock_mode);
@@ -746,9 +748,12 @@ auto LockManager::TryUpgradeRowLock(Transaction *txn, const table_oid_t &oid, Lo
     current_lock_mode = LockMode::SHARED;
   }
 
-  if (current_lock_mode == lock_mode) {
+  if (HasHigherLevelLock(current_lock_mode, lock_mode)) {
     return true;
   }
+  // if (current_lock_mode == lock_mode) {
+  //   return true;
+  // }
   // Check for valid lock upgrade paths
   try {
     CheckValidUpgrade(txn, current_lock_mode, lock_mode);
