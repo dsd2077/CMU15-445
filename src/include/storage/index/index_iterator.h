@@ -30,6 +30,23 @@ class IndexIterator {
   IndexIterator(BPT *bpt, Page *buffer_page, LeafPage *bpt_page, int pos);
   // 复制构造函数
   IndexIterator(const IndexIterator &other) = default;
+  auto operator=(const IndexIterator &other) -> IndexIterator & {
+    // 检查自赋值
+    if (this == &other) {
+      return *this;
+    }
+    // 复制数据
+    bpt_ = other.bpt_;
+    if (other.buffer_page_ != nullptr) {
+      buffer_page_ = bpt_->FetchPage(other.buffer_page_->GetPageId());
+      buffer_page_->RLatch();
+      bpt_page_ = reinterpret_cast<LeafPage *>(buffer_page_);
+    }
+    current_ = other.current_;
+    // 返回当前对象的引用
+    return *this;
+  }
+
   ~IndexIterator();  // NOLINT
 
   auto IsEnd() -> bool;
@@ -49,9 +66,9 @@ class IndexIterator {
 
  private:
   // add your own private member variables here
-  BPT *bpt_;
-  Page *buffer_page_;
-  LeafPage *bpt_page_;
+  BPT *bpt_ = nullptr;
+  Page *buffer_page_ = nullptr;
+  LeafPage *bpt_page_ = nullptr;
   int current_;
 };
 

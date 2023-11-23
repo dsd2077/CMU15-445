@@ -235,6 +235,9 @@ class AggregationExecutor : public AbstractExecutor {
   }
 
  private:
+  void FetchAndDoAgg();
+
+ private:
   /** The aggregation plan node */
   const AggregationPlanNode *plan_;
   /** The child executor that produces tuples over which the aggregation is computed */

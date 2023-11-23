@@ -40,10 +40,14 @@ auto TransactionManager::Begin(Transaction *txn, IsolationLevel isolation_level)
 
   std::unique_lock<std::shared_mutex> l(txn_map_mutex);
   txn_map[txn->GetTransactionId()] = txn;
+  txn->SetState(TransactionState::GROWING);
   return txn;
 }
 
 void TransactionManager::Commit(Transaction *txn) {
+  if (txn->GetState() == TransactionState::ABORTED) {
+    return;
+  }
   txn->SetState(TransactionState::COMMITTED);
 
   // Perform all deletes before we commit.

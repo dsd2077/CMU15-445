@@ -87,6 +87,7 @@ class ExecutionEngine {
                            std::vector<Tuple> *result_set) {
     RID rid{};
     Tuple tuple{};
+    // TODO(dsd) :这里需要做异常捕获吗？
     while (executor->Next(&tuple, &rid)) {
       if (result_set != nullptr) {
         result_set->push_back(tuple);

@@ -29,6 +29,12 @@ void AggregationExecutor::Init() {
   aht_.Clear();
   is_empty_res_ = true;
 
+  FetchAndDoAgg();
+
+  aht_iterator_ = aht_.Begin();
+}
+
+void AggregationExecutor::FetchAndDoAgg() {
   Tuple child_tuple{};
   RID child_rid{};
   while (child_->Next(&child_tuple, &child_rid)) {
@@ -41,8 +47,6 @@ void AggregationExecutor::Init() {
   if (is_empty_res_ && plan_->GetGroupBys().empty()) {
     aht_.InsertCombine({}, aht_.GenerateInitialAggregateValue());
   }
-
-  aht_iterator_ = aht_.Begin();
 }
 
 auto AggregationExecutor::Next(Tuple *tuple, RID *rid) -> bool {

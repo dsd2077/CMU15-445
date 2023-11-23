@@ -12,6 +12,7 @@
 
 #include <memory>
 
+#include "concurrency/transaction_manager.h"
 #include "execution/executors/delete_executor.h"
 
 namespace bustub {
@@ -20,7 +21,18 @@ DeleteExecutor::DeleteExecutor(ExecutorContext *exec_ctx, const DeletePlanNode *
                                std::unique_ptr<AbstractExecutor> &&child_executor)
     : AbstractExecutor(exec_ctx), plan_(plan), child_executor_(std::move(child_executor)) {}
 
-void DeleteExecutor::Init() { child_executor_->Init(); }
+void DeleteExecutor::Init() {
+  child_executor_->Init();
+  // delete下层算子一定是seq_scan，所以直接加SIX锁
+  table_info_ = exec_ctx_->GetCatalog()->GetTable(plan_->table_oid_);
+  try {
+    exec_ctx_->GetLockManager()->LockTable(exec_ctx_->GetTransaction(), LockManager::LockMode::INTENTION_EXCLUSIVE,
+                                           table_info_->oid_);
+  } catch (const TransactionAbortException &) {
+    exec_ctx_->GetTransactionManager()->Abort(exec_ctx_->GetTransaction());
+    throw;
+  }
+}
 
 auto DeleteExecutor::Next(Tuple *tuple, RID *rid) -> bool {
   if (all_done_) {
@@ -29,16 +41,27 @@ auto DeleteExecutor::Next(Tuple *tuple, RID *rid) -> bool {
   // 将所有元素插入，然后返回false
   Tuple child_tuple{};
   int count = 0;
-  auto table = exec_ctx_->GetCatalog()->GetTable(plan_->table_oid_);
-  std::vector<IndexInfo *> indexs = exec_ctx_->GetCatalog()->GetTableIndexes(table->name_);
+  std::vector<IndexInfo *> indexs = exec_ctx_->GetCatalog()->GetTableIndexes(table_info_->name_);
 
   while (child_executor_->Next(&child_tuple, rid)) {
-    table->table_->MarkDelete(*rid, exec_ctx_->GetTransaction());
+    table_info_->table_->MarkDelete(*rid, exec_ctx_->GetTransaction());
+    try {
+      exec_ctx_->GetLockManager()->LockRow(exec_ctx_->GetTransaction(), LockManager::LockMode::EXCLUSIVE,
+                                           table_info_->oid_, *rid);
+    } catch (const TransactionAbortException &) {
+      exec_ctx_->GetTransactionManager()->Abort(exec_ctx_->GetTransaction());
+      throw;
+    }
+    // TableWriteRecord write_record(*rid, WType::DELETE, child_tuple, table_info_->table_.get());
+    // exec_ctx_->GetTransaction()->AppendTableWriteRecord(write_record);
     count++;
     for (auto index_info : indexs) {
       Tuple key_tuple =
-          child_tuple.KeyFromTuple(table->schema_, index_info->key_schema_, index_info->index_->GetKeyAttrs());
+          child_tuple.KeyFromTuple(table_info_->schema_, index_info->key_schema_, index_info->index_->GetKeyAttrs());
       index_info->index_->DeleteEntry(key_tuple, *rid, exec_ctx_->GetTransaction());
+      IndexWriteRecord index_record(*rid, table_info_->oid_, WType::DELETE, child_tuple, index_info->index_oid_,
+                                    exec_ctx_->GetCatalog());
+      exec_ctx_->GetTransaction()->AppendIndexWriteRecord(index_record);
     }
   }
 

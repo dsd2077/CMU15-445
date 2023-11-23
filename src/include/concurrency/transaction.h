@@ -207,6 +207,10 @@ class Transaction {
    */
   inline void AppendTableWriteRecord(const TableWriteRecord &write_record) {
     table_write_set_->push_back(write_record);
+
+    for (auto &table_record : *table_write_set_) {
+      [[maybe_unused]] auto rid = table_record.rid_;
+    }
   }
 
   /**
@@ -304,6 +308,7 @@ class Transaction {
   /** @return the current state of the transaction */
   inline auto GetState() -> TransactionState { return state_; }
 
+  // 什么时候需要对事务进行加锁？
   inline auto LockTxn() -> void { latch_.lock(); }
 
   inline auto UnlockTxn() -> void { latch_.unlock(); }

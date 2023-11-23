@@ -64,7 +64,7 @@ class LockManager {
   class LockRequestQueue {
    public:
     /** List of lock requests for the same resource (table or row) */
-    std::list<LockRequest *> request_queue_;
+    std::list<std::shared_ptr<LockRequest>> request_queue_;
     /** For notifying blocked transactions on this rid */
     std::condition_variable cv_;
     /** txn_id of an upgrading transaction (if any) */
@@ -296,6 +296,44 @@ class LockManager {
    * Runs cycle detection in the background.
    */
   auto RunCycleDetection() -> void;
+
+ private:
+  auto IsLegalLockRequest(Transaction *txn, LockMode lock_mode) -> bool;
+
+  auto IsTableLocked(Transaction *txn, const table_oid_t &oid) -> bool;
+
+  auto GetTableLockMode(Transaction *txn, const table_oid_t &oid) -> LockMode;
+
+  void CheckValidUpgrade(Transaction *txn, LockMode current_lock_mode, LockMode lock_mode);
+
+  auto IsTableBeingUpgrading(const table_oid_t &oid) -> bool;
+  auto IsRowBeingUpgrading(const RID &rid) -> bool;
+
+  auto TryUpgradeLock(Transaction *txn, const table_oid_t &oid, LockMode lock_mode) -> bool;
+  auto TryUpgradeRowLock(Transaction *txn, const table_oid_t &oid, LockMode lock_mode, const RID &rid) -> bool;
+
+  auto UpgradeLock(Transaction *txn, const table_oid_t &oid, LockMode lock_mode, bool is_row = false,
+                   const RID &rid = RID{}) -> bool;
+
+  void AddTxnTableLockSet(Transaction *txn, const table_oid_t &oid, LockMode lock_mode);
+  void AddTxnRowLockSet(Transaction *txn, const table_oid_t &oid, LockMode lock_mode, const RID &rid);
+
+  void DelTxnTableLockSet(Transaction *txn, const table_oid_t &oid, LockMode lock_mode);
+  void DelTxnRowLockSet(Transaction *txn, const table_oid_t &oid, LockMode lock_mode, const RID &rid);
+  // 检查当前的锁请求与之前的锁是否兼容
+  auto Compatible(std::shared_ptr<LockRequestQueue> lock_request_queue, std::shared_ptr<LockRequest> current_request)
+      -> bool;
+  // 检查事务中，表oid下时候还有行锁
+  auto HasRowBeingLocked(Transaction *txn, const table_oid_t &oid) -> bool;
+
+  void UpdateTransactionState(Transaction *txn, const std::shared_ptr<LockRequest> &lock_request);
+
+  auto CheckTableLock(Transaction *txn, LockMode lock_mode, const table_oid_t &oid) -> bool;
+
+  auto HasHigherLevelLock(LockMode current_lock_mode, LockMode lock_mode) -> bool;
+
+  auto Dfs(txn_id_t node, std::unordered_set<txn_id_t> &visited, std::unordered_set<txn_id_t> &rec_stack,
+           txn_id_t *txn_id) -> bool;
 
  private:
   /** Fall 2022 */
