@@ -85,7 +85,7 @@ TEST(LockManagerTest, CompatibilityTest1) {
   std::thread t1([&]() {
     bool res;
     std::this_thread::sleep_for(std::chrono::milliseconds(20));
-    res = lock_mgr.LockTable(txn1, LockManager::LockMode::SHARED_INTENTION_EXCLUSIVE, oid);
+    res = lock_mgr.LockTable(txn1, LockManager::LockMode::SHARED_INTENTION_EXCLUSIVE, oid);  // 阻塞
     EXPECT_TRUE(res);
     std::this_thread::sleep_for(std::chrono::milliseconds(20));
     CheckTableLockSizes(txn2, 0, 0, 1, 0, 0);
@@ -96,7 +96,7 @@ TEST(LockManagerTest, CompatibilityTest1) {
   std::thread t2([&]() {
     bool res;
     std::this_thread::sleep_for(std::chrono::milliseconds(30));
-    res = lock_mgr.LockTable(txn2, LockManager::LockMode::INTENTION_SHARED, oid);
+    res = lock_mgr.LockTable(txn2, LockManager::LockMode::INTENTION_SHARED, oid);  // 事实上这里也应该阻塞
     EXPECT_TRUE(res);
     std::this_thread::sleep_for(std::chrono::milliseconds(40));
     res = lock_mgr.UnlockTable(txn2, oid);

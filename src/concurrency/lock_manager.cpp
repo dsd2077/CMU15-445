@@ -54,7 +54,6 @@ auto LockManager::LockTable(Transaction *txn, LockMode lock_mode, const table_oi
     // 赋予锁
     lr->granted_ = true;
     AddTxnTableLockSet(txn, oid, lock_mode);
-    // 记录txn_id ----> Transaction *
     return true;
   }
   std::shared_ptr<LockRequestQueue> request_queue = iter->second;
@@ -393,6 +392,10 @@ auto LockManager::IsLegalLockRequest(Transaction *txn, LockMode lock_mode) -> bo
       if (!(lock_mode == LockMode::EXCLUSIVE || lock_mode == LockMode::INTENTION_EXCLUSIVE)) {
         throw TransactionAbortException(txn->GetTransactionId(), AbortReason::LOCK_SHARED_ON_READ_UNCOMMITTED);
       }
+      // 坑：没有考虑收缩加锁的情况
+      if (txn->GetState() == TransactionState::SHRINKING) {
+        throw TransactionAbortException(txn->GetTransactionId(), AbortReason::LOCK_ON_SHRINKING);
+      }
       break;
   }
   return true;
@@ -446,10 +449,8 @@ auto LockManager::TryUpgradeLock(Transaction *txn, const table_oid_t &oid, LockM
   //   return true;
   // }
   // Check for valid lock upgrade paths
-  try {
-    CheckValidUpgrade(txn, current_lock_mode, lock_mode);
-  } catch (const TransactionAbortException &) {
-    throw;
+  if (!CheckValidUpgrade(txn, current_lock_mode, lock_mode)) {
+    throw TransactionAbortException(txn->GetTransactionId(), AbortReason::INCOMPATIBLE_UPGRADE);
   }
   // Ensure only one transaction is upgrading its lock at a time
   if (IsTableBeingUpgrading(oid)) {
@@ -460,25 +461,25 @@ auto LockManager::TryUpgradeLock(Transaction *txn, const table_oid_t &oid, LockM
   return UpgradeLock(txn, oid, lock_mode);
 }
 
-void LockManager::CheckValidUpgrade(Transaction *txn, LockMode current_lock_mode, LockMode lock_mode) {
+auto LockManager::CheckValidUpgrade(Transaction *txn, LockMode current_lock_mode, LockMode lock_mode) -> bool {
   switch (current_lock_mode) {
     case LockMode::INTENTION_SHARED:
       break;
     case LockMode::SHARED:
     case LockMode::INTENTION_EXCLUSIVE:
       if (!(lock_mode == LockMode::EXCLUSIVE || lock_mode == LockMode::SHARED_INTENTION_EXCLUSIVE)) {
-        throw TransactionAbortException(txn->GetTransactionId(), AbortReason::INCOMPATIBLE_UPGRADE);
+        return false;
       }
       break;
     case LockMode::SHARED_INTENTION_EXCLUSIVE:
       if (lock_mode != LockMode::EXCLUSIVE) {
-        throw TransactionAbortException(txn->GetTransactionId(), AbortReason::INCOMPATIBLE_UPGRADE);
+        return false;
       }
       break;
     case LockMode::EXCLUSIVE:
-      throw TransactionAbortException(txn->GetTransactionId(), AbortReason::INCOMPATIBLE_UPGRADE);
-      break;
+      return false;
   }
+  return true;
 }
 
 void LockManager::AddTxnTableLockSet(Transaction *txn, const table_oid_t &oid, LockMode lock_mode) {
@@ -521,16 +522,47 @@ void LockManager::DelTxnTableLockSet(Transaction *txn, const table_oid_t &oid, L
   }
 }
 
-auto LockManager::Compatible(std::shared_ptr<LockRequestQueue> lock_request_queue,
+auto LockManager::Compatible(const std::shared_ptr<LockRequestQueue> &lock_request_queue,
+                             const std::shared_ptr<LockRequest> &current_request) -> bool {
+  std::list<std::shared_ptr<LockRequest>> locked_request_queue;
+  std::list<std::shared_ptr<LockRequest>> unlocked_request_queue;
+  for (auto &lock_req : lock_request_queue->request_queue_) {
+    if (lock_req->granted_) {
+      locked_request_queue.emplace_back(lock_req);
+    } else {
+      unlocked_request_queue.emplace_back(lock_req);
+    }
+    if (lock_req == current_request) {
+      break;
+    }
+  }
+  // 1.判断当前锁请求与队列中所有已经加锁的请求是否兼容，如果不兼容返回false
+  if (!locked_request_queue.empty() && !Compatible(locked_request_queue, current_request)) {
+    return false;
+  }
+  // 2.有锁正在升级，如果升级请求为当前请求返回true，否则返回false
+  if (lock_request_queue->upgrading_ != INVALID_TXN_ID) {
+    return lock_request_queue->upgrading_ == current_request->txn_id_;
+  }
+  // for (auto &lock_req : unlocked_request_queue) {
+  //   if (!Compatible(locked_request_queue, lock_req) || !Compatible(unlocked_request_queue, lock_req)) {
+  //     return false;
+  //   }
+  // }
+  bool all_compatible =
+      std::all_of(unlocked_request_queue.begin(), unlocked_request_queue.end(),
+                  [this, &locked_request_queue, &unlocked_request_queue](const auto &lock_req) {
+                    return Compatible(locked_request_queue, lock_req) && Compatible(unlocked_request_queue, lock_req);
+                  });
+  return all_compatible;
+}
+
+auto LockManager::Compatible(std::list<std::shared_ptr<LockRequest>> request_queue,
                              std::shared_ptr<LockRequest> current_request) -> bool {
-  auto is_compatible = [this, &lock_request_queue,
-                        &current_request](const std::function<bool(LockMode)> &checkCondition) {
-    for (auto &request : lock_request_queue->request_queue_) {
+  auto is_compatible = [&request_queue, &current_request](const std::function<bool(LockMode)> &checkCondition) {
+    for (auto &request : request_queue) {
       if (request == current_request) {
         break;
-      }
-      if (!request->granted_ && !Compatible(lock_request_queue, request)) {
-        return false;
       }
       if (!checkCondition(request->lock_mode_)) {
         return false;
@@ -538,6 +570,9 @@ auto LockManager::Compatible(std::shared_ptr<LockRequestQueue> lock_request_queu
     }
     return true;
   };
+  if (request_queue.empty()) {
+    return true;
+  }
   switch (current_request->lock_mode_) {
     case LockMode::INTENTION_SHARED:
       // 与排他锁不兼容
@@ -555,10 +590,7 @@ auto LockManager::Compatible(std::shared_ptr<LockRequestQueue> lock_request_queu
       return is_compatible([](LockMode mode) { return mode == LockMode::INTENTION_SHARED; });
     case LockMode::EXCLUSIVE:
       // 仅当队列中没有其他请求时兼容
-      return lock_request_queue->request_queue_.front() == current_request;
-    default:
-      // 未知的锁模式
-      return false;
+      return request_queue.front() == current_request;
   }
 }
 
@@ -649,7 +681,9 @@ void LockManager::UpdateTransactionState(Transaction *txn, const std::shared_ptr
   switch (txn->GetIsolationLevel()) {
     case IsolationLevel::REPEATABLE_READ:
       // In REPEATABLE_READ, unlocking either S or X locks sets state to SHRINKING
-      txn->SetState(TransactionState::SHRINKING);
+      if (lock_request->lock_mode_ == LockMode::EXCLUSIVE || lock_request->lock_mode_ == LockMode::SHARED) {
+        txn->SetState(TransactionState::SHRINKING);
+      }
       break;
     case IsolationLevel::READ_UNCOMMITTED:
     case IsolationLevel::READ_COMMITTED:
@@ -755,10 +789,8 @@ auto LockManager::TryUpgradeRowLock(Transaction *txn, const table_oid_t &oid, Lo
   //   return true;
   // }
   // Check for valid lock upgrade paths
-  try {
-    CheckValidUpgrade(txn, current_lock_mode, lock_mode);
-  } catch (const TransactionAbortException &) {
-    throw;
+  if (!CheckValidUpgrade(txn, current_lock_mode, lock_mode)) {
+    throw TransactionAbortException(txn->GetTransactionId(), AbortReason::INCOMPATIBLE_UPGRADE);
   }
 
   // Ensure only one transaction is upgrading its lock at a time

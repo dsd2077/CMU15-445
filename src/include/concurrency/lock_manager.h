@@ -304,7 +304,7 @@ class LockManager {
 
   auto GetTableLockMode(Transaction *txn, const table_oid_t &oid) -> LockMode;
 
-  void CheckValidUpgrade(Transaction *txn, LockMode current_lock_mode, LockMode lock_mode);
+  auto CheckValidUpgrade(Transaction *txn, LockMode current_lock_mode, LockMode lock_mode) -> bool;
 
   auto IsTableBeingUpgrading(const table_oid_t &oid) -> bool;
   auto IsRowBeingUpgrading(const RID &rid) -> bool;
@@ -321,7 +321,9 @@ class LockManager {
   void DelTxnTableLockSet(Transaction *txn, const table_oid_t &oid, LockMode lock_mode);
   void DelTxnRowLockSet(Transaction *txn, const table_oid_t &oid, LockMode lock_mode, const RID &rid);
   // 检查当前的锁请求与之前的锁是否兼容
-  auto Compatible(std::shared_ptr<LockRequestQueue> lock_request_queue, std::shared_ptr<LockRequest> current_request)
+  auto Compatible(const std::shared_ptr<LockRequestQueue> &lock_request_queue,
+                  const std::shared_ptr<LockRequest> &current_request) -> bool;
+  auto Compatible(std::list<std::shared_ptr<LockRequest>> request_queue, std::shared_ptr<LockRequest> current_request)
       -> bool;
   // 检查事务中，表oid下时候还有行锁
   auto HasRowBeingLocked(Transaction *txn, const table_oid_t &oid) -> bool;
