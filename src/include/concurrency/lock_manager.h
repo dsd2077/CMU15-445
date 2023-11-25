@@ -14,9 +14,11 @@
 
 #include <algorithm>
 #include <condition_variable>  // NOLINT
+#include <deque>
 #include <list>
 #include <memory>
 #include <mutex>  // NOLINT
+#include <set>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -33,6 +35,8 @@ class TransactionManager;
 /**
  * LockManager handles transactions asking for locks on records.
  */
+
+#define NO_CYCLE -1  // NOLINT
 class LockManager {
  public:
   enum class LockMode { SHARED, EXCLUSIVE, INTENTION_SHARED, INTENTION_EXCLUSIVE, SHARED_INTENTION_EXCLUSIVE };
@@ -322,7 +326,7 @@ class LockManager {
   void DelTxnRowLockSet(Transaction *txn, const table_oid_t &oid, LockMode lock_mode, const RID &rid);
   // 检查当前的锁请求与之前的锁是否兼容
   auto Compatible(const std::shared_ptr<LockRequestQueue> &lock_request_queue,
-                  const std::shared_ptr<LockRequest> &current_request) -> bool;
+                  const std::shared_ptr<LockRequest> &lock_request) -> bool;
   auto Compatible(std::list<std::shared_ptr<LockRequest>> request_queue, std::shared_ptr<LockRequest> current_request)
       -> bool;
   // 检查事务中，表oid下时候还有行锁
@@ -336,6 +340,11 @@ class LockManager {
 
   auto Dfs(txn_id_t node, std::unordered_set<txn_id_t> &visited, std::unordered_set<txn_id_t> &rec_stack,
            txn_id_t *txn_id) -> bool;
+  auto DepthFirstSearch(txn_id_t curr, std::set<txn_id_t> &visited, std::deque<txn_id_t> &path) -> txn_id_t;
+  void NotifyAllTransaction();
+
+  void RebuildWaitForGraph();
+  void TrimGraph(txn_id_t aborted_txn);
 
  private:
   /** Fall 2022 */
@@ -352,7 +361,7 @@ class LockManager {
   std::atomic<bool> enable_cycle_detection_;
   std::thread *cycle_detection_thread_;
   /** Waits-for graph representation. */
-  std::unordered_map<txn_id_t, std::vector<txn_id_t>> waits_for_;
+  std::unordered_map<txn_id_t, std::set<txn_id_t>> waits_for_;
   std::mutex waits_for_latch_;
 };
 

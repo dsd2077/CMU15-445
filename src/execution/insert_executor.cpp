@@ -27,8 +27,11 @@ void InsertExecutor::Init() {
   child_executor_->Init();
   table_info_ = exec_ctx_->GetCatalog()->GetTable(plan_->table_oid_);
   try {
-    exec_ctx_->GetLockManager()->LockTable(exec_ctx_->GetTransaction(), LockManager::LockMode::INTENTION_EXCLUSIVE,
-                                           table_info_->oid_);
+    bool is_locked = exec_ctx_->GetLockManager()->LockTable(
+        exec_ctx_->GetTransaction(), LockManager::LockMode::INTENTION_EXCLUSIVE, table_info_->oid_);
+    if (!is_locked) {
+      throw ExecutionException("Insert Executor Get Table Lock Failed");
+    }
   } catch (const TransactionAbortException &) {
     exec_ctx_->GetTransactionManager()->Abort(exec_ctx_->GetTransaction());
     throw;
@@ -49,8 +52,11 @@ auto InsertExecutor::Next(Tuple *tuple, RID *rid) -> bool {
     table_info_->table_->InsertTuple(child_tuple, rid, exec_ctx_->GetTransaction());
     // TODO(dsd) 是否有必要对rid加行锁？——有必要，以防止在当前事务提交之前，其他事务读取或修改这个新插入的行。
     try {
-      exec_ctx_->GetLockManager()->LockRow(exec_ctx_->GetTransaction(), LockManager::LockMode::EXCLUSIVE,
-                                           table_info_->oid_, *rid);
+      bool is_locked = exec_ctx_->GetLockManager()->LockRow(exec_ctx_->GetTransaction(),
+                                                            LockManager::LockMode::EXCLUSIVE, table_info_->oid_, *rid);
+      if (!is_locked) {
+        throw ExecutionException("Insert Executor Get Table Lock Failed");
+      }
     } catch (const TransactionAbortException &) {
       exec_ctx_->GetTransactionManager()->Abort(exec_ctx_->GetTransaction());
       throw;

@@ -25,8 +25,11 @@ void DeleteExecutor::Init() {
   child_executor_->Init();
   table_info_ = exec_ctx_->GetCatalog()->GetTable(plan_->table_oid_);
   try {
-    exec_ctx_->GetLockManager()->LockTable(exec_ctx_->GetTransaction(), LockManager::LockMode::INTENTION_EXCLUSIVE,
-                                           table_info_->oid_);
+    bool is_locked = exec_ctx_->GetLockManager()->LockTable(
+        exec_ctx_->GetTransaction(), LockManager::LockMode::INTENTION_EXCLUSIVE, table_info_->oid_);
+    if (!is_locked) {
+      throw ExecutionException("Delete Executor Get Table Lock Failed");
+    }
   } catch (const TransactionAbortException &) {
     exec_ctx_->GetTransactionManager()->Abort(exec_ctx_->GetTransaction());
     throw;
@@ -45,8 +48,11 @@ auto DeleteExecutor::Next(Tuple *tuple, RID *rid) -> bool {
   while (child_executor_->Next(&child_tuple, rid)) {
     table_info_->table_->MarkDelete(*rid, exec_ctx_->GetTransaction());
     try {
-      exec_ctx_->GetLockManager()->LockRow(exec_ctx_->GetTransaction(), LockManager::LockMode::EXCLUSIVE,
-                                           table_info_->oid_, *rid);
+      bool is_locked = exec_ctx_->GetLockManager()->LockRow(exec_ctx_->GetTransaction(),
+                                                            LockManager::LockMode::EXCLUSIVE, table_info_->oid_, *rid);
+      if (!is_locked) {
+        throw ExecutionException("Delete Executor Get Row Lock Failed");
+      }
     } catch (const TransactionAbortException &) {
       exec_ctx_->GetTransactionManager()->Abort(exec_ctx_->GetTransaction());
       throw;
