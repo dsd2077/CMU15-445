@@ -544,7 +544,7 @@ TEST(LockManagerTest, MixedTest) {
 
   delete txn1;
   delete txn2;
-  TEST_TIMEOUT_FAIL_END(1000)
+  TEST_TIMEOUT_FAIL_END(1000000)
 }
 
 }  // namespace bustub

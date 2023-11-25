@@ -308,7 +308,7 @@ class Transaction {
   /** @return the current state of the transaction */
   inline auto GetState() -> TransactionState { return state_; }
 
-  // 什么时候需要对事务进行加锁？
+  // 什么时候需要对事务进行加锁？——修改、访问事务内部的成员变量时
   inline auto LockTxn() -> void { latch_.lock(); }
 
   inline auto UnlockTxn() -> void { latch_.unlock(); }
