@@ -27,7 +27,6 @@ auto LockManager::LockTable(Transaction *txn, LockMode lock_mode, const table_oi
   auto state = txn->GetState();
   if (state != TransactionState::GROWING && state != TransactionState::SHRINKING) {
     txn->UnlockTxn();
-    throw TransactionAbortException(txn->GetTransactionId(), AbortReason::TABLE_LOCK_NOT_PRESENT);
     return false;
   }
 
@@ -73,7 +72,6 @@ auto LockManager::LockTable(Transaction *txn, LockMode lock_mode, const table_oi
   table_lock_map_latch_.unlock();
 
   request_queue->request_queue_.emplace_back(lr);
-  auto lock_request_iter = --request_queue->request_queue_.end();
   while (!Compatible(request_queue, lr) && txn->GetState() != TransactionState::ABORTED) {
     txn->UnlockTxn();
     request_queue->cv_.wait(lock);
@@ -82,7 +80,7 @@ auto LockManager::LockTable(Transaction *txn, LockMode lock_mode, const table_oi
   // 事务在等待加锁的过程中被外界abort了
   // 由于此时还未获得锁，TransactionManager调用Abort函数也不会清理lr请求，所以需要手动清理并notify_all
   if (txn->GetState() == TransactionState::ABORTED) {
-    request_queue->request_queue_.erase(lock_request_iter);
+    request_queue->request_queue_.remove(lr);
     request_queue->cv_.notify_all();
     txn->UnlockTxn();
     return false;
@@ -91,6 +89,9 @@ auto LockManager::LockTable(Transaction *txn, LockMode lock_mode, const table_oi
   lr->granted_ = true;
   AddTxnTableLockSet(txn, oid, lock_mode);
   txn->UnlockTxn();
+  if (lock_mode != LockMode::EXCLUSIVE) {
+    request_queue->cv_.notify_all();
+  }
   return true;
 }
 
@@ -148,7 +149,6 @@ auto LockManager::LockRow(Transaction *txn, LockMode lock_mode, const table_oid_
   auto state = txn->GetState();
   if (state != TransactionState::GROWING && state != TransactionState::SHRINKING) {
     txn->UnlockTxn();
-    throw TransactionAbortException(txn->GetTransactionId(), AbortReason::TABLE_LOCK_NOT_PRESENT);
     return false;
   }
   if (lock_mode != LockMode::EXCLUSIVE && lock_mode != LockMode::SHARED) {
@@ -197,8 +197,6 @@ auto LockManager::LockRow(Transaction *txn, LockMode lock_mode, const table_oid_
   request_queue->request_queue_.emplace_back(lr);
   auto lock_request_iter = --request_queue->request_queue_.end();
 
-  // 记录txn_id ----> Transaction *
-
   while (!Compatible(request_queue, lr) && txn->GetState() != TransactionState::ABORTED) {
     txn->UnlockTxn();
     request_queue->cv_.wait(lock);
@@ -214,6 +212,9 @@ auto LockManager::LockRow(Transaction *txn, LockMode lock_mode, const table_oid_
   lr->granted_ = true;
   AddTxnRowLockSet(txn, oid, lock_mode, rid);
   txn->UnlockTxn();
+  if (lock_mode != LockMode::EXCLUSIVE) {
+    request_queue->cv_.notify_all();
+  }
   return true;
 }
 
@@ -421,9 +422,6 @@ auto LockManager::IsLegalLockRequest(Transaction *txn, LockMode lock_mode) -> bo
   auto txn_id = txn->GetTransactionId();
   auto isolation_level = txn->GetIsolationLevel();
 
-  if (state != TransactionState::GROWING && state != TransactionState::SHRINKING) {
-    throw TransactionAbortException(txn_id, AbortReason::LOCK_ON_SHRINKING);
-  }
   switch (isolation_level) {
     case IsolationLevel::REPEATABLE_READ:
       // 在 REPEATABLE_READ 隔离级别下，所有锁在生长状态下都允许，但在收缩状态下不允许任何锁
@@ -699,7 +697,6 @@ auto LockManager::UpgradeLock(Transaction *txn, const table_oid_t &oid, LockMode
   }
   request_queue->request_queue_.insert(proper_pos, lr);
   request_queue->upgrading_ = txn->GetTransactionId();
-  auto lock_request_iter = --request_queue->request_queue_.end();
 
   while (!Compatible(request_queue, lr) && txn->GetState() != TransactionState::ABORTED) {
     txn->UnlockTxn();
@@ -709,7 +706,7 @@ auto LockManager::UpgradeLock(Transaction *txn, const table_oid_t &oid, LockMode
   // 事务在等待加锁的过程中被外界abort了
   // 由于此时还未获得锁，TransactionManager调用Abort函数也不会清理lr请求，所以需要手动清理并notify_all
   if (txn->GetState() == TransactionState::ABORTED) {
-    request_queue->request_queue_.erase(lock_request_iter);
+    request_queue->request_queue_.remove(lr);
     request_queue->upgrading_ = INVALID_TXN_ID;
     request_queue->cv_.notify_all();
     txn->UnlockTxn();
@@ -724,6 +721,9 @@ auto LockManager::UpgradeLock(Transaction *txn, const table_oid_t &oid, LockMode
   }
   request_queue->upgrading_ = INVALID_TXN_ID;
   txn->UnlockTxn();
+  if (lock_mode != LockMode::EXCLUSIVE) {
+    request_queue->cv_.notify_all();
+  }
   return true;
 }
 
