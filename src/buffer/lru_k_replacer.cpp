@@ -94,7 +94,7 @@ void LRUKReplacer::SetEvictable(frame_id_t frame_id, bool set_evictable) {
   std::unique_lock<std::mutex> guard(latch_);
   auto it = data_.find(frame_id);
   if (it == data_.end()) {
-    // LOG_DEBUG("SetEvictable can't find the frame_id line:%d", __LINE__);
+    LOG_DEBUG("SetEvictable can't find the frame_id line:%d", __LINE__);
     // throw "can't find the frame_id";
     return;
   }
