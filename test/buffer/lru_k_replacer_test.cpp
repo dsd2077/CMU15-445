@@ -36,7 +36,7 @@ TEST(LRUKReplacerTest, SampleTest) {
 
   // Scenario: Insert access history for frame 1. Now frame 1 has two access histories.
   // All other frames have max backward k-dist. The order of eviction is [2,3,4,5,1].
-  lru_replacer.RecordAccess(1);
+  lru_replacer.RecordAccess(1);  // 1已经放入缓存队列了
 
   // Scenario: Evict three pages from the replacer. Elements with max k-distance should be popped
   // first based on LRU.
@@ -54,7 +54,7 @@ TEST(LRUKReplacerTest, SampleTest) {
   lru_replacer.RecordAccess(3);
   lru_replacer.RecordAccess(4);
   lru_replacer.RecordAccess(5);
-  lru_replacer.RecordAccess(4);
+  lru_replacer.RecordAccess(4);  // 4加入缓存队列
   lru_replacer.SetEvictable(3, true);
   lru_replacer.SetEvictable(4, true);
   ASSERT_EQ(4, lru_replacer.Size());
@@ -64,7 +64,7 @@ TEST(LRUKReplacerTest, SampleTest) {
   ASSERT_EQ(3, value);
   ASSERT_EQ(3, lru_replacer.Size());
 
-  // Set 6 to be evictable. 6 Should be evicted next since it has max backward k-dist.
+  // Set 6 to be evictable. 6 Should be evicted next since it has max backward k-dist. [6,1,5,4]
   lru_replacer.SetEvictable(6, true);
   ASSERT_EQ(4, lru_replacer.Size());
   lru_replacer.Evict(&value);
@@ -72,7 +72,7 @@ TEST(LRUKReplacerTest, SampleTest) {
   ASSERT_EQ(3, lru_replacer.Size());
 
   // Now we have [1,5,4]. Continue looking for victims.
-  lru_replacer.SetEvictable(1, false);
+  lru_replacer.SetEvictable(1, false);  // 将一个frame设置为unEvictable要修改它在队列中的位置吗？
   ASSERT_EQ(2, lru_replacer.Size());
   ASSERT_EQ(true, lru_replacer.Evict(&value));
   ASSERT_EQ(5, value);

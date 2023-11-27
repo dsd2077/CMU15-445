@@ -11,24 +11,24 @@
 //===----------------------------------------------------------------------===//
 
 #include "buffer/lru_k_replacer.h"
+#include "common/logger.h"
 
 namespace bustub {
 
 LRUKReplacer::LRUKReplacer(size_t num_frames, size_t k) : replacer_size_(num_frames), k_(k) {}
 
-auto LRUKReplacer::EvictFrameFromList(std::list<std::tuple<frame_id_t, int, bool>> &target_list, frame_id_t *frame_id)
-    -> bool {
+auto LRUKReplacer::EvictFrameFromList(std::list<Frame> &target_list, frame_id_t *frame_id) -> bool {
   auto it = target_list.begin();
   for (; it != target_list.end(); it++) {
     // 可驱逐页
-    if (std::get<2>(*it)) {
+    if (it->evictable_) {
       break;
     }
   }
   if (it == target_list.end()) {
     return false;
   }
-  frame_id_t dele_frame_id = std::get<0>(*it);
+  frame_id_t dele_frame_id = it->frame_id_;
   data_.erase(dele_frame_id);
   target_list.erase(it);
   curr_size_--;
@@ -36,7 +36,7 @@ auto LRUKReplacer::EvictFrameFromList(std::list<std::tuple<frame_id_t, int, bool
   return true;
 }
 auto LRUKReplacer::Evict(frame_id_t *frame_id) -> bool {
-  std::scoped_lock<std::mutex> guard(latch_);
+  std::unique_lock<std::mutex> guard(latch_);
   // 如果队列为空return false
   if (data_.empty()) {
     return false;
@@ -52,79 +52,72 @@ auto LRUKReplacer::Evict(frame_id_t *frame_id) -> bool {
 }
 
 void LRUKReplacer::RecordAccess(frame_id_t frame_id) {
-  std::scoped_lock<std::mutex> guard(latch_);
-  // BUSTUB_ASSERT((frame_id < 0 || frame_id > replacer_size_), "invald address");
-
+  std::unique_lock<std::mutex> guard(latch_);
   auto it = data_.find(frame_id);
-  // 之前没有访问过并且还有多余物理页
   // 之前没有访问过，没有多余物理页，没有可驱逐页
   if (it == data_.end() && data_.size() == replacer_size_ && curr_size_ == 0) {
-    return;
+    LOG_DEBUG("RecordAccess: no more buffer space!, line:%d", __LINE__);
+    throw std::runtime_error("RecordAccess: no more buffer space!");
   }
   // 之前没有访问过，没有多余物理页，有可驱逐页
   if (it == data_.end() && data_.size() == replacer_size_ && curr_size_ > 0) {
-    frame_id_t temp_frame_it;
-    Evict(&temp_frame_it);
+    frame_id_t frame_id;
+    guard.unlock();
+    BUSTUB_ASSERT(Evict(&frame_id), "evit failed");
   }
   // 之前没有访问过，还有多余物理页（可能是刚刚驱逐的）
   if (it == data_.end()) {
     less_than_k_list_.emplace_back(frame_id, 1, false);
     data_[frame_id] = std::make_pair(std::prev(less_than_k_list_.end()), 0);
-
     return;
   }
   // 之前访问过的页
-  std::get<1>(*(it->second.first)) += 1;
-  size_t count = std::get<1>(*(it->second.first));
-  bool is_evictable = std::get<2>(*(it->second.first));
-  // 历史队列中的数据为第一次访问时的位置，只要未达到k次访问频率，位置一直保持不变。
+  it->second.first->visit_cnt_ += 1;
+  size_t count = it->second.first->visit_cnt_;
+  bool is_evictable = it->second.first->evictable_;
+  // 如果在历史队列中，位置不变
   if (it->second.second == 0 && count < k_) {
     return;
   }
   // 从原链表中删除
-  if (it->second.second == 0 && count >= k_) {
+  if (it->second.second == 0) {
     less_than_k_list_.erase(it->second.first);
   } else {
     more_than_k_list_.erase(it->second.first);
   }
   // 重新插入
-  if (count >= k_) {
-    more_than_k_list_.emplace_back(frame_id, count, is_evictable);
-    data_[frame_id] = std::make_pair(std::prev(more_than_k_list_.end()), 1);
-  } else {
-    less_than_k_list_.emplace_back(frame_id, count, is_evictable);
-    data_[frame_id] = std::make_pair(std::prev(less_than_k_list_.end()), 0);
-  }
+  more_than_k_list_.emplace_back(frame_id, count, is_evictable);
+  data_[frame_id] = std::make_pair(std::prev(more_than_k_list_.end()), 1);
 }
 
 void LRUKReplacer::SetEvictable(frame_id_t frame_id, bool set_evictable) {
-  std::scoped_lock<std::mutex> guard(latch_);
+  std::unique_lock<std::mutex> guard(latch_);
   auto it = data_.find(frame_id);
   if (it == data_.end()) {
-    throw "can't find the frame_id";
+    // LOG_DEBUG("SetEvictable can't find the frame_id line:%d", __LINE__);
+    // throw "can't find the frame_id";
     return;
   }
 
-  if (std::get<2>(*(it->second.first)) && !set_evictable) {  // 之前可驱逐，现在不可驱逐
+  if (it->second.first->evictable_ && !set_evictable) {  // 之前可驱逐，现在不可驱逐
     curr_size_--;
-  } else if (!std::get<2>(*(it->second.first)) && set_evictable) {  // 之前不可驱逐，现在可驱逐
+  } else if (!it->second.first->evictable_ && set_evictable) {  // 之前不可驱逐，现在可驱逐
     curr_size_++;
   }
-  std::get<2>(*(it->second.first)) = set_evictable;
+  it->second.first->evictable_ = set_evictable;
 }
 
 void LRUKReplacer::Remove(frame_id_t frame_id) {
-  std::scoped_lock<std::mutex> guard(latch_);
+  std::unique_lock<std::mutex> guard(latch_);
   auto it = data_.find(frame_id);
-  // 未找到直接返回
+  // 无效的frame id
   if (it == data_.end()) {
     return;
   }
   // 不可驱逐页
-  if (!std::get<2>(*(it->second.first))) {
-    // throw an exception
-    throw std::runtime_error("Remove: invald frame id");
-    return;
+  if (!it->second.first->evictable_) {
+    LOG_DEBUG("Remove can't evictable, line:%d", __LINE__);
+    throw std::runtime_error("Remove: can't evictable");
   }
 
   // 判断it所在链表
@@ -138,7 +131,7 @@ void LRUKReplacer::Remove(frame_id_t frame_id) {
 }
 
 auto LRUKReplacer::Size() -> size_t {
-  std::scoped_lock<std::mutex> guard(latch_);
+  std::unique_lock<std::mutex> guard(latch_);
   return curr_size_;
 }
 
