@@ -28,7 +28,8 @@ void DeleteExecutor::Init() {
     bool is_locked = exec_ctx_->GetLockManager()->LockTable(
         exec_ctx_->GetTransaction(), LockManager::LockMode::INTENTION_EXCLUSIVE, table_info_->oid_);
     if (!is_locked) {
-      throw ExecutionException("Delete Executor Get Table Lock Failed");
+      LOG_DEBUG("Delete Executor Get Table Lock Failed line:%d", __LINE__);
+      throw std::runtime_error("Delete Executor Get Table Lock Failed");
     }
   } catch (const TransactionAbortException &) {
     exec_ctx_->GetTransactionManager()->Abort(exec_ctx_->GetTransaction());
@@ -51,7 +52,8 @@ auto DeleteExecutor::Next(Tuple *tuple, RID *rid) -> bool {
       bool is_locked = exec_ctx_->GetLockManager()->LockRow(exec_ctx_->GetTransaction(),
                                                             LockManager::LockMode::EXCLUSIVE, table_info_->oid_, *rid);
       if (!is_locked) {
-        throw ExecutionException("Delete Executor Get Row Lock Failed");
+        LOG_DEBUG("Delete Executor Get Row Lock Failed line:%d", __LINE__);
+        throw std::runtime_error("Delete Executor Get Row Lock Failed");
       }
     } catch (const TransactionAbortException &) {
       exec_ctx_->GetTransactionManager()->Abort(exec_ctx_->GetTransaction());

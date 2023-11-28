@@ -25,14 +25,11 @@ SeqScanExecutor::SeqScanExecutor(ExecutorContext *exec_ctx, const SeqScanPlanNod
 void SeqScanExecutor::Init() {
   try {
     if (exec_ctx_->GetTransaction()->GetIsolationLevel() != IsolationLevel::READ_UNCOMMITTED) {
-      try {
-        bool is_locked = exec_ctx_->GetLockManager()->LockTable(
-            exec_ctx_->GetTransaction(), LockManager::LockMode::INTENTION_SHARED, table_info_->oid_);
-        if (!is_locked) {
-          throw ExecutionException("SeqScan Executor Get Table Lock Failed");
-        }
-      } catch (TransactionAbortException e) {
-        throw ExecutionException("SeqScan Executor Get Table Lock Failed" + e.GetInfo());
+      bool is_locked = exec_ctx_->GetLockManager()->LockTable(
+          exec_ctx_->GetTransaction(), LockManager::LockMode::INTENTION_SHARED, table_info_->oid_);
+      if (!is_locked) {
+        LOG_DEBUG("SeqScan Executor Get Table Lock Failed line:%d", __LINE__);
+        throw std::runtime_error("SeqScan Executor Get Table Lock Failed");
       }
     }
   } catch (const TransactionAbortException &) {
@@ -48,7 +45,8 @@ void SeqScanExecutor::Init() {
       bool is_locked = exec_ctx_->GetLockManager()->LockRow(exec_ctx_->GetTransaction(), LockManager::LockMode::SHARED,
                                                             table_info_->oid_, table_iter_->GetRid());
       if (!is_locked) {
-        throw ExecutionException("SeqScan Executor Get Table Lock Failed");
+        LOG_DEBUG("SeqScan Executor Get Row Lock Failed line:%d", __LINE__);
+        throw std::runtime_error("SeqScan Executor Get Row Lock Failed");
       }
     }
   } catch (const TransactionAbortException &) {
@@ -81,7 +79,8 @@ auto SeqScanExecutor::Next(Tuple *tuple, RID *rid) -> bool {
       bool is_locked = exec_ctx_->GetLockManager()->LockRow(exec_ctx_->GetTransaction(), LockManager::LockMode::SHARED,
                                                             table_info_->oid_, table_iter_->GetRid());
       if (!is_locked) {
-        throw ExecutionException("SeqScan Executor Get Table Lock Failed");
+        LOG_DEBUG("SeqScan Executor Get Row Lock Failed line:%d", __LINE__);
+        throw std::runtime_error("SeqScan Executor Get Row Lock Failed");
       }
     }
   } catch (const TransactionAbortException &) {
